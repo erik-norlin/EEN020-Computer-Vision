@@ -1,4 +1,8 @@
 function [r,q]=rq(a)
+
+% a=[3.16858508e+01 , 5.37450888e+00, -2.37316364e+01 , 4.57240309e+02;
+%  -6.17871091e+00  ,3.74708538e+01 ,-6.30408653e+00 , 5.32244803e+02;
+%   1.13220024e-02  ,7.39767953e-03 , 7.13474527e-03 , 4.34724760e-01];
 % RQ [r,q]=rq(a) factorises a such a=rq where r upper tri. and q unit matrix
 % If a is not square, then q is equal q=[q1 q2] where q1 is unit matrix
 
@@ -15,5 +19,7 @@ r=r*fix;
 q=fix*q;
 
 if n>m
+  disp(q);
   q=[q, inv(r)*a(:,m+1:n)];
+  disp(q);
 end
