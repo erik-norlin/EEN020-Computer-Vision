@@ -131,7 +131,47 @@ def normalise_x_and_y(img_pts):
 
     return img_pts_norm, N
 
-def estimate_camera_DLT(Xmodel, img_pts):
+# def DLT_P3(X_model, x_model):
+
+#     n = np.size(x_model,1)
+#     M = []
+
+#     for i in range(n):
+
+#         X = X_model[0,i]
+#         Y = X_model[1,i]
+#         Z = X_model[2,i]
+
+#         x = x_model[0,i]
+#         y = x_model[1,i]
+
+#         m = np.array([[X, Y, Z, 1, 0, 0, 0, 0, -x*X, -x*Y, -x*Z, -x],
+#                       [0, 0, 0, 0, X, Y, Z, 1, -y*X, -y*Y, -y*Z, -y]])
+
+#         M.append(m)
+
+#     M = np.concatenate(M, 0)
+#     U, S, VT = np.linalg.svd(M, full_matrices=False)
+#     M_approx = U @ np.diag(S) @ VT
+
+#     v = VT[-1,:] # last row of VT because optimal v should be last column of V
+#     Mv = M @ v
+
+#     print('||Mv||:', (Mv @ Mv)**0.5)
+#     print('||v||^2:', v @ v)
+#     print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+#     # print('S:', S)
+    
+#     return VT
+
+# def estimate_camera_DLT_v2(X_model, x_model):
+
+#     VT = DLT_P3(X_model, x_model)
+#     P = np.stack([VT[-1, i:i+4] for i in range(0, 12, 4)], 0)
+
+#     return P
+
+def estimate_camera_DLT(Xmodel, img_pts, print_svd=False):
 
     n = np.size(img_pts,1)
     M = []
@@ -153,15 +193,18 @@ def estimate_camera_DLT(Xmodel, img_pts):
     M = np.concatenate(M, 0)
     U, S, VT = np.linalg.svd(M, full_matrices=False)
     P = np.stack([VT[-1, i:i+4] for i in range(0, 12, 4)], 0)
-    # print(np.shape(U), '\n\n',np.shape(S), '\n\n', np.shape(VT))
-    M_approx = U @ np.diag(S) @ VT
 
-    v = VT[-1,:] # last row of VT because optimal v should be last column of V
-    Mv = M @ v
-    print('||Mv||:', (Mv @ Mv)**0.5)
-    print('||v||^2:', v @ v)
-    print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
-    # print('S:', S)
+    if P[2,2] < 0:
+        P = -P
+
+    if print_svd:
+        M_approx = U @ np.diag(S) @ VT
+        v = VT[-1,:] # last row of VT because optimal v should be last column of V
+        Mv = M @ v
+        print('\n||Mv||:', (Mv @ Mv)**0.5)
+        print('||v||^2:', v @ v)
+        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+        print('S:', S)
 
     return P
 
@@ -216,6 +259,14 @@ def get_sift_plot_points(img1_pts, img2_pts, img1):
     y = [img1_pts[:,1], img2_pts[:,1]]
     return x, y
 
+def remove_error_2P_points(x_proj, x_img, err):
+
+    x_keep = (((x_proj[0,:] - x_img[0,:])**2 + (x_proj[1,:] - x_img[1,:])**2)**0.5 < err)
+    x_proj_keep = x_proj[:,x_keep]
+    x_img_keep = x_img[:,x_keep]
+    
+    return x_proj_keep, x_img_keep
+
 def plot_cameras_and_axes(ax, C_list, axis_list, s):
 
     col = cm.rainbow(np.linspace(0, 1, np.size(C_list,1)))
@@ -265,7 +316,7 @@ def plot_image_points_projected_points_and_image(x_proj, x_img, img, path):
     plt.gca().invert_yaxis()
 
     plt.legend(loc="lower right")
-    plt.imshow(img)
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     fig.savefig(path, dpi=300)
 
     plt.show()
