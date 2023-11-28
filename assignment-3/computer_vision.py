@@ -243,6 +243,50 @@ def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, print_svd=False):
     X = np.stack(X,1)
     return X
 
+def estimate_F_DLT(img_pts_1, img_pts_2, print_svd=False): # Computes F such that x2.T @ F @ x1 = 0
+
+    n = np.size(img_pts_1,1)
+    M = []
+
+    for i in range(n):
+
+        # x1 = img_pts_1[0,i]
+        # y1 = img_pts_1[1,i]
+        # z1 = img_pts_1[2,i]
+        
+        # x2 = img_pts_2[0,i]
+        # y2 = img_pts_2[1,i]
+        # z2 = img_pts_2[2,i]
+
+        # m = np.array([[x2*x1, x2*y1, x2*z1, y2*x1, y2*y1, y2*z1, z2*x1, z2*y1, z2*z1]])
+
+        x = img_pts_1[:,i]
+        y = img_pts_2[:,i]
+        m = np.outer(y, x).flatten()
+        M.append([m])
+
+
+    M = np.concatenate(M, 0)
+    U, S, VT = np.linalg.svd(M, full_matrices=False)
+    F = VT[-1,:].reshape(3,3)
+    F = enforce_fundamental(F)
+
+    if print_svd:
+        print('\nDet(F):', np.linalg.det(F))
+        for i in range(np.size(img_pts_1,1)):
+            epi_const = img_pts_2[:,i].T @ F @ img_pts_1[:,i]
+            print('x2^T @ F @ x1:', epi_const)
+
+        M_approx = U @ np.diag(S) @ VT
+        v = VT[-1,:] # last row of VT because optimal v should be last column of V
+        Mv = M @ v
+        print('||Mv||:', (Mv @ Mv)**0.5)
+        print('||v||^2:', v @ v)
+        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+        print('S:', S)
+
+    return F
+
 def rq(a):
 
     m, n = a.shape
