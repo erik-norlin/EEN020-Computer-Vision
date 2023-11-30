@@ -130,8 +130,13 @@ def normalise_x_and_y(img_pts):
                     [0, 0, 1]])
     
     img_pts_norm = N @ img_pts
+    
+    print('\nx_mean:', np.mean(img_pts_norm[0,:]), '\nx_std:', np.std(img_pts_norm[0,:]), '\ny_mean:', np.mean(img_pts_norm[1,:]), '\ny_std:', np.std(img_pts_norm[1,:]))
 
     return img_pts_norm, N
+
+def check_mean_and_std(x):
+    print('\nx_mean:', np.mean(x[0,:]), '\nx_std:', np.std(x[0,:]), '\ny_mean:', np.mean(x[1,:]), '\ny_std:', np.std(x[1,:]))
 
 # def DLT_P3(X_model, x_model):
 
@@ -243,6 +248,14 @@ def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, print_svd=False):
     X = np.stack(X,1)
     return X
 
+def enforce_fundamental(F):
+    U, S, VT = np.linalg.svd(F, full_matrices=False)
+    if np.linalg.det(U @ VT) < 0:
+        VT = -VT
+    S[-1] = 0
+    F = U @ np.diag(S) @ VT
+    return F  
+
 def estimate_F_DLT(img_pts_1, img_pts_2, print_svd=False): # Computes F such that x2.T @ F @ x1 = 0
 
     n = np.size(img_pts_1,1)
@@ -286,6 +299,54 @@ def estimate_F_DLT(img_pts_1, img_pts_2, print_svd=False): # Computes F such tha
         print('S:', S)
 
     return F
+
+def compute_epipolar_lines(F, x1, x2):
+    l2 = F @ x1
+    l1 = F.T @ x2
+    return l1, l2
+
+def compute_and_plot_lines(l, img, ax):
+
+    col = cm.rainbow(np.linspace(0, 1, np.size(l,1)))
+
+    for i in range(np.size(l,1)):
+
+        a = l[0,i]
+        b = l[1,i]
+        c = l[2,i]
+
+        x = np.linspace(0, np.size(img,1), 2)
+        y = (-a*x - c) / b # ax + by + c = 0 ==> y = (-ax - c) / b
+
+        ax.plot(x, y, '-', lw=3, color=col[i], alpha=0.7) #  label='Line {}'.format(i+1)
+
+def point_line_distance_2D(l, p):
+
+    D = []
+    for i in range(np.size(l,1)):
+
+        a = l[0,i]
+        b = l[1,i]
+        c = l[2,i]
+
+        x = p[0,i]
+        y = p[1,i]
+
+        d = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
+        D.append([d])   
+        
+    D = np.concatenate(D, 0)
+    return D
+
+def compute_epipolar_errors(F, x1, x2):
+
+    l1, l2 = compute_epipolar_lines(F, x1, x2)
+    
+    D1 = point_line_distance_2D(l1, x1)
+    D2 = point_line_distance_2D(l2, x2)
+    D_tot = np.concatenate((D1,D2),0)
+
+    return D1, D2, D_tot
 
 def rq(a):
 
