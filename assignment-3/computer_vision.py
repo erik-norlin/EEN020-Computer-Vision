@@ -349,6 +349,21 @@ def convert_E_to_F(E, K1, K2):
     F = np.linalg.inv(K2).T @ E @ np.linalg.inv(K1)
     return F
 
+def extract_valid_camera_and_points(P1, P_arr, X_arr):
+        
+    x1_arr = np.array([cv.transform(P1, X) for X in X_arr])
+    valid_coords_P1 = np.array([np.sum(x[-1] > 0) for x in x1_arr])
+
+    x2_arr = np.array([cv.transform(P_arr[i], X_arr[i]) for i in range(np.size(P_arr, 0))])
+    valid_coords_P2 = np.array([np.sum(x[-1] > 0) for x in x2_arr]) 
+
+    valid_coords = valid_coords_P1 + valid_coords_P2
+    valid_coords_ind = np.argmax(valid_coords)
+    X_valid = X_arr[valid_coords_ind]
+    P2_valid = P_arr[valid_coords_ind]
+
+    return P2_valid, X_valid
+
 def compute_epipolar_lines(F, x1, x2):
     l2 = F @ x1
     l1 = F.T @ x2
@@ -513,10 +528,11 @@ def plot_image_points_projected_points_and_image(x_proj, x_img, img, path):
     plt.xlabel('$x$')
     plt.ylabel('$y$')
     plt.axis('equal')
-    plt.gca().invert_yaxis()
+    # plt.gca().invert_yaxis()
 
     plt.legend(loc="lower right")
     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    fig.tight_layout()
     fig.savefig(path, dpi=300)
 
     plt.show()

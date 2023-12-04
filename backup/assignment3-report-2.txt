@@ -317,7 +317,7 @@ Fe_1=
 = \textbf{0}
 $$
 
-Using Mathematica we can also verify that the determinant of $F$ is zero.
+We can observe that $F$ does not have full rank because the first two rows of it are linearly dependent. This implies that the determinant of $F$ is zero.
 
 
 \subsection*{Theoretical Exercise 3}
@@ -688,10 +688,10 @@ C_2 \\ \mu
 [e_2]_\times FC_2 + \mu e_2 = 0
 $$
 
-Since $Fe_1=0$ we set $C_2=e_1$ where $e_1\sim \text{null}(F)=(-2,-1,1)^T$. Hence, $\mu=0$, and thus, 
+The nullspace of $F$ and hence $[e_2]_\times F$ is $C_2=e_1$, and this leaves us with $\mu=0$. Thus, 
 
 $$
-C_2\sim \begin{pmatrix}
+C_2= \begin{pmatrix}
 -2 \\ -1 \\ 1 \\ 0 
 \end{pmatrix}
 $$
@@ -764,16 +764,21 @@ Both $V^T$ and $R$ are orthonormal and the product of two orthonormal matrices i
 
 \subsection*{Computer Exercise 2}
 
-The minimum singular value is equal to $||Mv||$ and is approximately 0.0066, the determinant of F is equal to zero, and the epipolar constraints $\Tilde{x}_2^TE\Tilde{x}_1$ are roughly zero for all points. The computed essential matrix is
+The minimum singular value is equal to $||Mv||$ and is approximately 0.0066, the determinant of F is equal to zero, and the epipolar constraints $\Tilde{x}_2^TE\Tilde{x}_1$ are roughly zero for all points. The computed essential matrix (normalised with the last element) is
 
 $$
 E\approx
 \begin{pmatrix}
-    3.20e-03 & 3.62e-01 &-1.36e-01\\
--4.51e-01 &-2.82e-02 & 8.81e-01\\
- 1.70e-01 &-9.18e-01 &-3.60e-04\\
+ -8.89 & -1005.81 & 377.08\\
+ 1252.52 & 78.37 & -2448.17\\
+ -472.79 & 2550.19 & 1.00
 \end{pmatrix}
  $$
+
+% 3.20e-03 & 3.62e-01 &-1.36e-01\\
+% -4.51e-01 &-2.82e-02 & 8.81e-01\\
+% 1.70e-01 &-9.18e-01 &-3.60e-04\\
+
 
 and scaled such that its singular values are 1, 1 and 0.
 
@@ -844,7 +849,29 @@ V=
 \end{pmatrix}
 $$
 
-we verify with Mathematica that det($UV^T$) is indeed 1. The essential matrix is computed as  
+We verify that det($UV^T$) is 1 by utilizing the formula 
+
+$$
+det\begin{pmatrix}
+a & b & c \\
+d & e & f \\
+g & h & i
+\end{pmatrix}=
+aei-afh-bdi+bgf+cdh-ceg
+$$
+
+$$
+det(UV^T)=
+det\begin{pmatrix}
+1/\sqrt{2} & 0 & 1/\sqrt{2} \\
+1/\sqrt{2} & 0 & -1/\sqrt{2} \\
+0 & 1 & 0
+\end{pmatrix}=
+0+1/2+0+0+1/2+0=1
+$$
+
+
+
 
 $$
 E = 
@@ -909,11 +936,11 @@ x_1 =
 \end{pmatrix}
 \sim P_1X = [I\mid 0]
 \begin{pmatrix}
-    X_1/X_4\\X_2/X_4\\X_3/X_4\\1
+    X_1/s\\X_2/s\\X_3/s\\1
 \end{pmatrix}
 =
 \begin{pmatrix}
-    X_1/X_4\\X_2/X_4\\X_3/X_4
+    X_1/s\\X_2/s\\X_3/s
 \end{pmatrix}
 =
 \frac{1}{s}
@@ -1063,60 +1090,30 @@ $$
 \Rightarrow s=1/\sqrt{2}
 $$
 
-For $X(s)$ to be in front of a pair of calibrated cameras, such that each camera $P[R\mid t]$ has det($R$)=1, the depth of the scaled projected point in both cameras must be positive since $P_1$ is located in the origin and faces the positive direction of the $z$-axis. $P_1$ and all solutions for $P_2$ are calibrated cameras with det($R$)=1. The solutions for $P_2$ that gives positive $z$-coordinates after projection in the second camera is $P_2 = [UWV^T\mid u_3]$ and $P_2 = [UW^TV^T\mid u_3]$. However, only $s=1/\sqrt{2}$ yields a positive $z$-coordinate in $P_1$. Thus, the only choice of $P_2$ that yields $X(s)$ in front of both $P_1$ and $P_2$ is $P_2 = [UWV^T\mid u_3]$.
+For $X(s)$ to be in front of a pair of calibrated cameras, such that each camera $P=[R\mid t]$ has det($R$)=1, the depth of the scaled projected point in both cameras must be positive. $P_1$ and all solutions for $P_2$ are calibrated cameras with det($R$)=1. The solutions for $P_2$ that gives positive $z$-coordinates after projection in the second camera are $P_2 = [UWV^T\mid u_3]$ and $P_2 = [UW^TV^T\mid u_3]$. However, only $s=1/\sqrt{2}$ yields a positive $z$-coordinate in $P_1$. Thus, the only choice of $P_2$ that yields $X(s)$ in front of both $P_1$ and $P_2$ is $P_2 = [UWV^T\mid u_3]$.
 
-
-\subsection*{Computer Exercise 3}
-
-
- The projected poings align with the image points.
-
-The 3D reconstruction looks reasonable and looks like expected.
 
 
 \subsection*{Computer Exercise 3}
 
-Figure \ref{fig:ce3-k1} and \ref{fig:ce3-k2} show the two images, the same 20 random points as in Computer Exercise 1 and 2 and their corresponding epipolar lines. We can observe that the points are reasonably close to the lines and that the point-to-line distance in pixels is identical to in Computer Exercise 2, in fact the mean error is 2.08 pixels for both images.
+Figure \ref{fig:ce3-k1} and \ref{fig:ce3-k2} show the two images, the image points and the projected 3D points from triangulation using the valid extracted camera from the estimated $E$. We can observe that the projected points fall close to the image points. Furthermore, the average pixel error in the first image is 0.99, 1.04 in the second image and 1.02 for both images.
 
  \begin{figure}[H]
      \centering
      \includegraphics[width=0.8\linewidth]{CE3_kronan1.png}
-     \caption{View from the first camera, 20 random points and their corresponding epipolar lines.}
+     \caption{View from the first camera, image points and projected image points. The average pixel error in the first image is 0.99.}
      \label{fig:ce3-k1}
  \end{figure}
 
  \begin{figure}[H]
      \centering
      \includegraphics[width=0.8\linewidth]{CE3_kronan2.png}
-     \caption{View from the second camera, 20 random points and their corresponding epipolar lines.}
+     \caption{View from the second camera, image points and projected image points. The average pixel error in the first image is 1.04.}
      \label{fig:ce3-k2}
  \end{figure}
 
- Figure \ref{fig:ce3-hist1}, \ref{fig:ce3-hist2} and \ref{fig:ce3-histtot} show histograms of the distance (error) between the points and their corresponding epipolar lines. The errors are identical to the errors in Computer Exercise 2. This shows that there is no loss of information when projecting the triangulated 3D points using the extracted valid camera from $E$.
- 
- \begin{figure}[H]
-     \centering
-     \includegraphics[width=0.8\linewidth]{CE3_hist_1.png}
-     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the first image. The mean distance is $\approx 1.98$.}
-     \label{fig:ce3-hist1}
- \end{figure}
 
-  \begin{figure}[H]
-     \centering
-     \includegraphics[width=0.8\linewidth]{CE3_hist_2.png}
-     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the second image. The mean distance is $\approx 2.08$.}
-     \label{fig:ce3-hist2}
- \end{figure}
-
-   \begin{figure}[H]
-     \centering
-     \includegraphics[width=0.8\linewidth]{CE3_hist_tot.png}
-     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in both images. The mean distance is $\approx 2.03$.}
-     \label{fig:ce3-histtot}
- \end{figure}
-
-
-Figure \ref{fig:ce3-f}, \ref{fig:ce3-a} and \ref{fig:ce3-l} show a 3D reconstruction from triangulation using the only valid extracted camera from the estimated essential matrix. The 3D reconstruction looks reasonable and similar to the object in the images. Camera 1 faces the object from left and below, and camera 2 faces the object from the right and below as expected from the images.
+Figure \ref{fig:ce3-f}, \ref{fig:ce3-a} and \ref{fig:ce3-l} show a 3D reconstruction from triangulation using the only valid extracted camera from the estimated essential matrix. The 3D reconstruction looks reasonable and similar to the object in the images. Camera 1 faces the object a little bit from the left and below, and camera 2 faces the object from the front and below as expected from the images.
  
    \begin{figure}[H]
      \centering
