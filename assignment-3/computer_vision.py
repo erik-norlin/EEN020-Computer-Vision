@@ -54,8 +54,8 @@ def compute_camera_center_and_normalized_principal_axis(P):
 def compute_camera_and_normalized_principal_axis(P, multi=False):
 
     if multi:
-        C_arr = np.array([homogenize(compute_camera_center(P[i])) for i in range(np.size(P))])
-        axis_arr = np.array([homogenize(compute_normalized_principal_axis(P[i])) for i in range(np.size(P))])
+        C_arr = np.array([homogenize(compute_camera_center(P[i])) for i in range(np.size(P,0))])
+        axis_arr = np.array([homogenize(compute_normalized_principal_axis(P[i])) for i in range(np.size(P,0))])
     else:
         C_arr = np.array([homogenize(compute_camera_center(P))])
         axis_arr = np.array([homogenize(compute_normalized_principal_axis(P))])
@@ -201,9 +201,6 @@ def estimate_camera_DLT(Xmodel, img_pts, print_svd=False):
     U, S, VT = np.linalg.svd(M, full_matrices=False)
     P = np.stack([VT[-1, i:i+4] for i in range(0, 12, 4)], 0)
 
-    if P[2,2] < 0:
-        P = -P
-
     if print_svd:
         M_approx = U @ np.diag(S) @ VT
         v = VT[-1,:] # last row of VT because optimal v should be last column of V
@@ -250,8 +247,8 @@ def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, print_svd=False):
 
 def enforce_fundamental(F):
     U, S, VT = np.linalg.svd(F, full_matrices=False)
-    if np.linalg.det(U @ VT) < 0:
-        VT = -VT
+    # if np.linalg.det(U @ VT) < 0:
+    #     VT = -VT
     S[-1] = 0
     F = U @ np.diag(S) @ VT
     return F  
@@ -285,11 +282,11 @@ def estimate_F_DLT(img_pts_1, img_pts_2, print_svd=False): # Computes F such tha
     F = enforce_fundamental(F)
 
     if print_svd:
-        print('\nDet(F):', np.linalg.det(F))
         for i in range(np.size(img_pts_1,1)):
             epi_const = img_pts_2[:,i].T @ F @ img_pts_1[:,i]
             print('x2^T @ F @ x1:', epi_const)
-
+        
+        print('\nDet(F):', np.linalg.det(F))
         M_approx = U @ np.diag(S) @ VT
         v = VT[-1,:] # last row of VT because optimal v should be last column of V
         Mv = M @ v
@@ -298,6 +295,58 @@ def estimate_F_DLT(img_pts_1, img_pts_2, print_svd=False): # Computes F such tha
         print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
         print('S:', S)
 
+    F = F/F[-1,-1]
+    return F
+
+def enforce_essential(E):
+    U, _, VT = np.linalg.svd(E, full_matrices=False)
+    if np.linalg.det(U @ VT) < 0:
+        VT = -VT
+    E =  U @ np.diag([1,1,0]) @ VT
+    return E
+
+def estimate_E_DLT(img_pts_1, img_pts_2, print_svd=False): # Computes F such that x2.T @ F @ x1 = 0
+
+    n = np.size(img_pts_1,1)
+    M = []
+
+    for i in range(n):
+
+        x = img_pts_1[:,i]
+        y = img_pts_2[:,i]
+        m = np.outer(y, x).flatten()
+        M.append([m])
+
+    M = np.concatenate(M, 0)
+    U, S, VT = np.linalg.svd(M, full_matrices=False)
+    E = VT[-1,:].reshape(3,3)
+    E = enforce_essential(E)
+
+    if print_svd:
+        for i in range(np.size(img_pts_1,1)):
+            epi_const = img_pts_2[:,i].T @ E @ img_pts_1[:,i]
+            print('x2^T @ E @ x1:', epi_const)
+        
+        print('\nDet(E):', np.linalg.det(E))
+        M_approx = U @ np.diag(S) @ VT
+        v = VT[-1,:] # last row of VT because optimal v should be last column of V
+        Mv = M @ v
+        print('||Mv||:', (Mv @ Mv)**0.5)
+        print('||v||^2:', v @ v)
+        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+        print('S:', S)
+
+    E = E/E[-1,-1]
+    return E
+
+def normalise_camera(P):
+    P= P/P[-1,-1]
+    if P[2,2] < 0:
+        P = -P
+    return P
+
+def convert_E_to_F(E, K1, K2):
+    F = np.linalg.inv(K2).T @ E @ np.linalg.inv(K1)
     return F
 
 def compute_epipolar_lines(F, x1, x2):
@@ -438,7 +487,7 @@ def plot_cameras_and_axes(ax, C_list, axis_list, s):
 
 def plot_cameras_and_3D_points(X, C_arr, axis_arr, s, path):
     
-    fig = plt.figure(figsize=(10,8))
+    fig = plt.figure(figsize=(8,6))
     ax = plt.axes(projection='3d')
 
     ax.plot(X[0], X[1], X[2], '.', ms=0.6, color='magenta', label='3D points')

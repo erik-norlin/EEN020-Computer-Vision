@@ -1,0 +1,1143 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[left=2.5cm,top=2cm,right=2.5cm,bottom=2cm,nofoot]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[UKenglish]{babel}
+\usepackage[UKenglish]{isodate}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{systeme}
+\usepackage{booktabs}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{icomma}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage[parfill]{parskip}
+\usepackage[title,titletoc]{appendix}
+\usepackage{multicol}
+\usepackage{float}
+\usepackage{gensymb}
+\usepackage{url}
+\usepackage{subcaption}
+\usepackage{esvect}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{cancel}
+\usepackage{comment}
+\usepackage{makecell}
+\usepackage[numbered,framed]{matlab-prettifier}
+\definecolor{mygreen}{RGB}{28,172,0} % color values Red, Green, Blue
+\definecolor{mylilas}{RGB}{170,55,241}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstdefinelanguage{Julia}%
+  {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,%
+      end,export,false,for,function,immutable,import,importall,if,in,%
+      macro,module,otherwise,quote,return,switch,true,try,type,typealias,%
+      using,while},%
+   sensitive=true,%
+   alsoother={\$},%
+   morecomment=[l]\#,%
+   morecomment=[n]{\#=}{=\#},%
+   morestring=[s]{"}{"},%
+   morestring=[m]{'}{'},%
+}[keywords,comments,strings]%
+
+\lstset{%
+    language         = Julia,
+    basicstyle       = \ttfamily,
+    keywordstyle     = \bfseries\color{blue},
+    stringstyle      = \color{magenta},
+    commentstyle     = \color{ForestGreen},
+    showstringspaces = false,
+}
+\lstset{style=mystyle}
+\pagestyle{myheadings}
+\pagenumbering{empty}
+
+\title{Assignment 3 EEN020 Computer vision}
+\date{\today}
+
+\begin{document}
+\cleanlookdateon
+\maketitle
+\begin{center}
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{cc}
+Erik Norlin
+\end{tabular}
+
+\end{center}
+\vspace{1.0cm}
+
+\pagenumbering{arabic}
+
+
+\section*{The Fundamental Matrix}
+\subsection*{Theoretical Exercise 1}
+We have the camera pair
+
+$$ P_1 = [I\mid 0]\text{, and }
+P_2 =
+\begin{pmatrix}
+1 & 1 & 0 & 2 \\
+0 & 1 & 0 & 2 \\
+0 & 0 & 1 & 0 \\
+\end{pmatrix}
+$$
+
+For these camera matrices the fundamental matrix is calculated as 
+
+$$
+F=[t]_\times M
+$$
+
+where $M=P_{2_{1:3,1:3}}$ and $t=P_{2_{1:3,4}}$
+
+$$
+F = \begin{pmatrix}
+0 & 0 & 2 \\
+0 & 0 & -2 \\
+-2 & 2 & 0  \\
+\end{pmatrix}
+\begin{pmatrix}
+1 & 1 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 1 \\
+\end{pmatrix}
+=
+\begin{pmatrix}
+0 & 0 & 2 \\
+0 & 0 & -2 \\
+2 & 0 & 0 \\
+\end{pmatrix}
+$$
+
+Given a projected point $x_1=(0,2)$ in $P_1$ from the 3D points $X$, the epipolar line in the second image generated from $x_1$ is calculated as 
+
+$$
+l_2 = Fx_1 = 
+\begin{pmatrix}
+0 & 0 & 2 \\
+0 & 0 & -2 \\
+2 & 0 & 0 \\
+\end{pmatrix}
+\begin{pmatrix}
+0 \\
+2 \\
+1 \\
+\end{pmatrix}
+=
+\begin{pmatrix}
+2 \\
+-2 \\
+0 \\
+\end{pmatrix}
+$$
+
+To find which of the points (1,0), (3,2) and (1,1) correspond to $x_1$ in $P_2$ we compute $x_2^TFx_1=x_2^Tl_2$. The corresponding point will satisfy $x_2^TFx_1=x_2^Tl_2=0$.
+
+$$
+x_2^TFx_1 = 
+\begin{pmatrix}
+1 & 0 & 1
+\end{pmatrix}
+\begin{pmatrix}
+2 \\
+-2 \\
+0 \\
+\end{pmatrix}
+=2 \neq 0
+$$
+
+$$
+x_2^TFx_1 = 
+\begin{pmatrix}
+3 & 2 & 1
+\end{pmatrix}
+\begin{pmatrix}
+2 \\
+-2 \\
+0 \\
+\end{pmatrix}
+=2 \neq 0
+$$
+
+$$
+x_2^TFx_1 = 
+\begin{pmatrix}
+1 & 1 & 1
+\end{pmatrix}
+\begin{pmatrix}
+2 \\
+-2 \\
+0 \\
+\end{pmatrix}
+=0
+$$
+
+Thus, $x_2=(1,1)$ could be a projection of the same point $X$ in $P_2$.
+
+
+\subsection*{Theoretical Exercise 2}
+We have the camera pair
+
+$$ P_1 = [I\mid 0]\text{, and }
+P_2 = [M \mid t] =
+\begin{pmatrix}
+0 & 1 & 1 & 2 \\
+3 & 2 & 0 & 1 \\
+0 & 0 & 3 & 0 \\
+\end{pmatrix}
+$$
+
+and we want to compute the epipoles by projecting the camera centers.
+
+$$
+e_1 = P_1
+\begin{pmatrix}
+-M^{-1}t \\
+1 \\
+\end{pmatrix}
+=
+[I\mid 0]
+\begin{pmatrix}
+1 \\
+-2 \\
+0 \\
+1 \\
+\end{pmatrix}
+=
+\begin{pmatrix}
+1 \\
+-2 \\
+0 \\
+\end{pmatrix}
+$$
+
+$$
+e_2 = P_2
+\begin{pmatrix}
+-I^{-1}\cdot 0 \\
+1 \\
+\end{pmatrix}
+=
+\begin{pmatrix}
+0 & 1 & 1 & 2 \\
+3 & 2 & 0 & 1 \\
+0 & 0 & 3 & 0 \\
+\end{pmatrix}
+\begin{pmatrix}
+0 \\
+0 \\
+0 \\
+1 \\
+\end{pmatrix}
+=
+\begin{pmatrix}
+2 \\
+1 \\
+0 \\
+\end{pmatrix}
+$$
+
+We compute the fundamental matrix as 
+
+$$
+F=[t]_\times M = 
+\begin{pmatrix}
+0 & 0 & 1 \\
+0 & 0 & -2 \\
+-1 & 2 & 0 \\
+\end{pmatrix}
+\begin{pmatrix}
+0 & 1 & 1 \\
+3 & 2 & 0 \\
+0 & 0 & 3 \\
+\end{pmatrix}
+=
+\begin{pmatrix}
+0 & 0 & 3 \\
+0 & 0 & -6 \\
+6 & 3 & -1 \\
+\end{pmatrix}
+$$
+
+We check that $e_2^TF=0$ and $Fe_1=0$
+
+$$
+e_2^TF =
+\begin{pmatrix}
+2 & 1 & 0
+\end{pmatrix}
+\begin{pmatrix}
+0 & 0 & 3 \\
+0 & 0 & -6 \\
+6 & 3 & -1 \\
+\end{pmatrix}
+= \textbf{0}
+$$
+
+$$
+Fe_1=
+\begin{pmatrix}
+0 & 0 & 3 \\
+0 & 0 & -6 \\
+6 & 3 & -1 \\
+\end{pmatrix}
+\begin{pmatrix}
+1 \\
+-2 \\
+0 \\
+\end{pmatrix}
+= \textbf{0}
+$$
+
+Using Mathematica we can also verify that the determinant of $F$ is zero.
+
+
+\subsection*{Theoretical Exercise 3}
+
+We have the camera pair
+
+$$
+P_1 = [I\mid 0] \text{, and } P_2 = [A \mid t]
+$$
+
+and want to compute the epipoles by projecting the camera centers
+
+$$
+e_1 = P_1C_2=
+\begin{bmatrix}
+I \mid 0
+\end{bmatrix}
+\begin{bmatrix}
+-A^{-1}t \\
+1 \\
+\end{bmatrix}
+=
+-A^{-1}t
+$$
+
+$$
+e_2 = P_2C_1=
+\begin{bmatrix}
+A \mid t
+\end{bmatrix}
+\begin{bmatrix}
+\textbf{0} \\
+1 \\
+\end{bmatrix}
+=
+t
+$$
+
+The fundamental matrix is $F=[t]_\times A$ and we verify that the epipoles always fulfill $e_2^TF=0$ and $Fe_1=0$.
+
+$$
+e_2^TF = t^T[t]_\times A= 
+\begin{pmatrix}
+t_1 & t_2 & t_3
+\end{pmatrix}
+\begin{pmatrix}
+0 & -t_3 & t_2 \\
+t_3 & 0 & -t_1 \\
+-t_2 & t_1 & 0 \\
+\end{pmatrix}A
+=
+\begin{pmatrix}
+t_2t_3-t_3t_2 \\
+-t_1t_3+t_3t_1 \\
+t_1t_2-t_2t_1\\
+\end{pmatrix}^TA
+=\textbf{0}
+$$
+
+$$
+Fe_1 = -[t]_\times AA^{-1}t = -[t]_\times t=
+\begin{pmatrix}
+0 & -t_3 & t_2 \\
+t_3 & 0 & -t_1 \\
+-t_2 & t_1 & 0 \\
+\end{pmatrix}
+\begin{pmatrix}
+t_1\\
+t_2 \\
+t_3\\
+\end{pmatrix}
+=
+\begin{pmatrix}
+-t_3t_2+t_2t_3 \\
+t_3t_1-t_1t_3 \\
+-t_2t_1+t_1t_2\\
+\end{pmatrix}
+=\textbf{0}
+$$
+
+The determinant of the fundamental matrix is zero because it is not full rank. $[t]_\times$ is of rank 2 (not full rank) and $A$ is of rank 3 (full rank and hence invertable). Multiplying $[t]_\times$ with $A$ gives $F$ with rank 2 (not full rank). Hence, the determinant of $F$ must be zero. 
+
+
+\subsection*{Theoretical Exercise 4}
+
+We have that 
+
+$$
+\Tilde{x}_1 \sim N_1x_1\text{, } \Tilde{x}_2 \sim N_2x_2 \text{, and } \Tilde{x}_2^T\Tilde{F}\Tilde{x}_1=0
+$$
+
+Expanding $\Tilde{x}_2^T\Tilde{F}\Tilde{x}_1$ we obtain
+
+$$
+\Tilde{x}_2^T\Tilde{F}\Tilde{x}_1= (N_2x_2)^T\Tilde{F}N_1x_1 = x_2^TN_2^T\Tilde{F}N_1x_1=0
+$$
+
+where $F=N_2^T\Tilde{F}N_1$ is the fundamental matrix for the original
+(un-normalised) points, and thus $x_2^TFx_1=0$.
+
+\subsection*{Computer Exercise 1}
+
+\subsubsection*{Normalised case}
+The minimum singular value is equal to $||Mv||$ and is approximately 0.0497, the determinant of F is equal to zero, and the epipolar constraints $\Tilde{x}_2^T\Tilde{F}\Tilde{x}_1$ are roughly zero for all points. The computed fundamental matrix for this case is
+
+$$
+F\approx
+\begin{pmatrix}
+    -3.39e-08 & -3.72e-06 & 5.77e-03\\
+  4.67e-06 & 2.89e-07 & -2.67e-02\\
+ -7.19e-03 & 2.63e-02 & 1.00\\
+\end{pmatrix}
+$$
+
+Figure \ref{fig:ce1-k1-n} and \ref{fig:ce1-k2-n} show the two images, and their corresponding epipolar lines. We can see from the images that the point-to-line distance in pixels is small, in fact the mean error is 0.35 pixels in total for both images.
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_kronan1_norm.png}
+     \caption{View from the first camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce1-k1-n}
+ \end{figure}
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_kronan2_norm.png}
+     \caption{View from the second camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce1-k2-n}
+ \end{figure}
+
+ Figure \ref{fig:ce1-hist1-n}, \ref{fig:ce1-hist2-n} and \ref{fig:ce1-histtot-n} show histograms of the distance (error) between the points and their corresponding epipolar lines.
+ 
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_hist_norm_1.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the first image. The mean point-to-line distance is $\approx 0.34$.}
+     \label{fig:ce1-hist1-n}
+ \end{figure}
+
+  \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_hist_norm_2.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the second image. The mean point-to-line distance is $\approx 0.36$.}
+     \label{fig:ce1-hist2-n}
+ \end{figure}
+
+   \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_hist_norm_tot.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in both images. The mean point-to-line distance is $\approx 0.35$.}
+     \label{fig:ce1-histtot-n}
+ \end{figure}
+
+
+
+
+\subsubsection*{Unnormalised case}
+The minimum singular value is equal to $||Mv||$ and is approximately 0.5629, the determinant of F is equal to zero, and the epipolar constraints $x_2^TFx_1$ are roughly zero for all points. The computed fundamental matrix for this case is
+
+$$
+F\approx
+\begin{pmatrix}
+-3.16e-08 &-3.85e-06 & 5.83e-03\\
+  4.79e-06 & 2.82e-07 & -2.66e-02\\
+ -7.24e-03 & 2.62e-02 & 1.00\\
+\end{pmatrix}
+$$
+
+Figure \ref{fig:ce1-k1-un} and \ref{fig:ce1-k2-un} show the two images, the same 20 random points as before and their corresponding epipolar lines. We can see that the point-to-line distance is small in the images, in fact the mean error is 0.47 pixels in total for both images, about 35\% larger than the total mean error for the normalised case. This shows that normalising the image points before estimating the fundamental matrix gives more accurate results in this case.
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_kronan1_norm.png}
+     \caption{View from the first camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce1-k1-un}
+ \end{figure}
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_kronan2_norm.png}
+     \caption{View from the second camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce1-k2-un}
+ \end{figure}
+
+ Figure \ref{fig:ce1-hist1-un}, \ref{fig:ce1-hist2-un} and \ref{fig:ce1-histtot-un} show histograms of the distance (error) between the points and their corresponding epipolar lines. The errors are larger for the unnormalised case for both images.
+ 
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_hist_unnorm_1.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the first image. The mean point-to-line distance is $\approx 0.46$.}
+     \label{fig:ce1-hist1-un}
+ \end{figure}
+
+  \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_hist_unnorm_2.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the second image. The mean point-to-line distance is $\approx 0.49$.}
+     \label{fig:ce1-hist2-un}
+ \end{figure}
+
+   \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE1_hist_unnorm_tot.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in both images. The mean point-to-line distance is $\approx 0.47$.}
+     \label{fig:ce1-histtot-un}
+ \end{figure}
+
+
+
+
+
+\subsection*{Theoretical Exercise 5}
+
+Considering the fundamental matrix 
+
+$$
+F=
+\begin{pmatrix}
+0 & 1 & 1 \\
+2 & 0 & 4 \\
+0 & 1 & 1 \\
+\end{pmatrix}
+$$
+
+and the camera pair
+
+$$ P_1 = [I\mid 0]
+\text{, and }
+P_2 = [[e_2]_\times F\mid e_2]
+$$
+
+where $e_2\sim \text{null}(F^T)=(-1,0,1)^T$. Hence,
+
+$$
+P_2 = [[e_2]_\times F\mid e_2] = 
+\begin{bmatrix}
+\begin{pmatrix}
+0 & -e_{2_3} & e_{2_2} \\
+e_{2_3} & 0 & -e_{2_1} \\
+-e_{2_2} & e_{2_1} & 0 \\
+\end{pmatrix}
+\begin{pmatrix}
+0 & 1 & 1 \\
+2 & 0 & 4 \\
+0 & 1 & 1 \\
+\end{pmatrix}\big\vert
+\begin{pmatrix}
+e_{2_1}\\
+e_{2_2} \\
+e_{2_3} \\
+\end{pmatrix}
+\end{bmatrix}
+=
+\begin{pmatrix}
+-2 & 0 & -4 & -1 \\
+0 & 2 & 2 & 0 \\
+-2 & 0 & -4 & 1 \\
+\end{pmatrix}
+$$
+
+We verify that the projection of the scene points $X_1=(0,3,1)^T$ and $X_2=(-1,2,0)^T$ in both cameras fulfill the epipolar constraint $x_2^TFx_1=0$. For $X_1$ we have
+
+$$
+x_1\sim P_1 X_1 = [I\mid 0] \begin{pmatrix}
+    0 \\ 3 \\ 1 \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    0 \\ 3 \\ 1 
+\end{pmatrix}
+\Rightarrow x_1 = \begin{pmatrix}
+    0 \\ 3 \\ 1 
+\end{pmatrix}
+$$
+
+$$
+x_2\sim P_2 X_1 = 
+\begin{pmatrix}
+-2 & 0 & -4 & -1 \\
+0 & 2 & 2 & 0 \\
+-2 & 0 & -4 & 1 \\
+\end{pmatrix}
+\begin{pmatrix}
+    0 \\ 3 \\ 1 \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    -5 \\ 8 \\ -3 
+\end{pmatrix}
+\Rightarrow x_2 = \begin{pmatrix}
+    5/3 \\ -8/3 \\ 1
+\end{pmatrix}
+$$
+
+$$
+x_2^TFx_1=
+\begin{pmatrix}
+ 5/3 & -8/3 & 1
+\end{pmatrix}
+\begin{pmatrix}
+0 & 1 & 1 \\
+2 & 0 & 4 \\
+0 & 1 & 1 \\
+\end{pmatrix}
+\begin{pmatrix}
+0 \\ 3 \\ 1 
+\end{pmatrix}
+= 0
+$$
+
+For $X_2$ we have
+
+$$
+x_1\sim P_1 X_2 = [I\mid 0] \begin{pmatrix}
+    -1 \\ 2 \\ 0 \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    -1 \\ 2 \\ 0 
+\end{pmatrix}
+\Rightarrow x_1 = \begin{pmatrix}
+    -1 \\ 2 \\ 0 
+\end{pmatrix}
+$$
+
+$$
+x_2\sim P_2 X_1 = 
+\begin{pmatrix}
+-2 & 0 & -4 & -1 \\
+0 & 2 & 2 & 0 \\
+-2 & 0 & -4 & 1 \\
+\end{pmatrix}
+\begin{pmatrix}
+    -1 \\ 2 \\ 0 \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    1 \\ 4 \\ 3 
+\end{pmatrix}
+\Rightarrow x_2 = \begin{pmatrix}
+    1/3 \\ 4/3 \\ 1
+\end{pmatrix}
+$$
+
+$$
+x_2^TFx_1=
+\begin{pmatrix}
+ 1/3 & 4/3 & 1
+\end{pmatrix}
+\begin{pmatrix}
+0 & 1 & 1 \\
+2 & 0 & 4 \\
+0 & 1 & 1 \\
+\end{pmatrix}
+\begin{pmatrix}
+-1 \\ 2 \\ 0 
+\end{pmatrix}
+= 0
+$$
+
+To compute the camera center of $P_2$ we have that
+
+$$
+P_2\begin{pmatrix}
+C_2 \\ \mu  
+\end{pmatrix}=0
+\Leftrightarrow
+[e_2]_\times FC_2 + \mu e_2 = 0
+$$
+
+Since $Fe_1=0$ we set $C_2=e_1$ where $e_1\sim \text{null}(F)=(-2,-1,1)^T$. Hence, $\mu=0$, and thus, 
+
+$$
+C_2\sim \begin{pmatrix}
+-2 \\ -1 \\ 1 \\ 0 
+\end{pmatrix}
+$$
+
+which is a point at infinity.
+
+
+\section*{The Essential Matrix}
+
+\subsection*{Theoretical Exercise 6}
+
+We show that the eigenvalues of $[t]_\times^T[t]_\times$ are the squared singular values of the skew symmetric matrix $[t]_\times$ with the SVD $USV^T$ as following
+
+$$
+[t]_\times^T[t]_\times = (USV^T)USV^T = VS^TU^TUSV^T=VS^TSV^T
+$$
+
+Since $S$ is a diagonal matrix we can write 
+
+$$
+[t]_\times^T[t]_\times = VS^2V^T
+$$
+
+This shows that $S^2$ diagonalizes $[t]_\times^T[t]_\times$ and contains therefore the eigenvalues of $[t]_\times^T[t]_\times$, which are the squared singular values of $[t]_\times$.
+
+If $w$ satisfies $-t\times(t\times w)=\lambda w$ for some $\lambda$ we have that
+
+$$
+-t\times(t\times w)=-[t]_\times [t]_\times w=[t]_\times^T[t]_\times w=\lambda w
+$$
+
+since $[t]_\times + [t]^T_\times=0$. From this we have that $w$ is an eigenvector of $[t]_\times^T[t]_\times$ with eigenvalue $\lambda$.
+
+From theory we find the formula
+
+$$
+u\times (v\times w) = (u\cdot w)v-(u\cdot v)w
+$$
+
+Then in this case we get
+
+$$
+-t\times(t\times w) = (-t\cdot w)t-(-t\cdot t)w
+$$
+
+If $w=t$ we get that
+
+$$
+[t]_\times^T[t]_\times t= -t\times(t\times t) = (-t\cdot t)t-(-t\cdot t)t =0\cdot t
+$$
+
+In other words, $w=t$ is an eigenvector of eigenvalue zero. If $w$ is perpendicular to $t$, i.e., $t\cdot w =0$ we get
+
+$$
+[t]_\times^T[t]_\times w= -t\times(t\times w) = (-0)t-(-t\cdot t)w = ||t||^2w
+$$
+
+Thus, any vector $w$ perpendicular to $t$ is an eigenvector with eigenvalue $||t||^2$ to $[t]_\times^T[t]_\times$. 
+
+Since $S^2\in \mathbb{R}^{3\times3}$ it has three elements along the diagonal. Hence, $[t]_\times^T[t]_\times$ has three eigenvalues, and these are $||t||^2$ with $\pm t$ and 0. Furthermore, since $S$ contains the singular values of $[t]_\times$ and $S^2$ contains the eigenvalues of $[t]_\times^T[t]_\times$ then the singular values of $[t]_\times$ are the square root of $S^2$, which are $||t||$ with $\pm t$ and 0.
+
+We find an SVD of $E=[t]_\times R$ with $[t]_\times$ having the SVD as demonstrated above as following
+
+$$
+E=[t]_\times R = US(V^TR)
+$$
+
+Both $V^T$ and $R$ are orthonormal and the product of two orthonormal matrices is also orthonormal. $US(V^TR)$ is therefore a valid SVD of $E$, and its singular values are $S=\text{diag}(||t||, 
+||t||, 0)$.
+
+\subsection*{Computer Exercise 2}
+
+The minimum singular value is equal to $||Mv||$ and is approximately 0.0066, the determinant of F is equal to zero, and the epipolar constraints $\Tilde{x}_2^TE\Tilde{x}_1$ are roughly zero for all points. The computed essential matrix is
+
+$$
+E\approx
+\begin{pmatrix}
+    3.20e-03 & 3.62e-01 &-1.36e-01\\
+-4.51e-01 &-2.82e-02 & 8.81e-01\\
+ 1.70e-01 &-9.18e-01 &-3.60e-04\\
+\end{pmatrix}
+ $$
+
+and scaled such that its singular values are 1, 1 and 0.
+
+Figure \ref{fig:ce2-k1} and \ref{fig:ce2-k2} show the two images, the same 20 random points as in Computer Exercise 1 and their corresponding epipolar lines. We can see that the point-to-line distance in pixels is small here as well. However, the total mean point-to-line distance for both images this time is 2.08 pixels, which is about a 592\% larger error than for the normalised case in Computer Exercise 1. The reason for this increase in error is because we are fundamentally changing the estimated $E$ when we set its singular values to 1, 1 and 0. Since $E$ is defined up to scale, the scaling in of itself is not a problem. When estimating $E$ two singular values are approximately the same but not precisely and the last singular value is approximately zero, so we will never get a perfect solution for $E$. Then when we enforce the singular values to be "perfect" we are destroying the solution. However, performing this enforcement is important for camera reconstruction later, and since the error is still relatively small this is overlooked.
+
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE2_kronan1.png}
+     \caption{View from the first camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce2-k1}
+ \end{figure}
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE2_kronan2.png}
+     \caption{View from the second camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce2-k2}
+ \end{figure}
+
+ Figure \ref{fig:ce2-hist1}, \ref{fig:ce2-hist2} and \ref{fig:ce2-histtot} show histograms of the distance (error) between the points and their corresponding epipolar lines. The errors are larger than for both cases in Computer Exercise 1.
+ 
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE2_hist_1.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the first image. The mean point-to-line distance is $\approx 1.98$, 
+ about 582\% larger than the normalised case in Computer Exercise 1.}
+     \label{fig:ce2-hist1}
+ \end{figure}
+
+  \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE2_hist_2.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the second image. The mean point-to-line distance is $\approx 2.08$, 
+ about 578\% larger than the normalised case in Computer Exercise 1.}
+     \label{fig:ce2-hist2}
+ \end{figure}
+
+   \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE2_hist_tot.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in both images. The mean point-to-line distance is $\approx 2.03$, 
+ about 580\% larger than the normalised case in Computer Exercise 1.}
+     \label{fig:ce2-histtot}
+ \end{figure}
+
+\subsection*{Theoretical Exercise 7}
+
+Considering the essential matrix
+
+$$
+E=U\text{diag}([1,1,0])V^T
+$$
+
+where 
+
+$$U=
+\begin{pmatrix}
+-1/\sqrt{2} & -1/\sqrt{2} & 0 \\
+-1/\sqrt{2} & 1/\sqrt{2} & 0 \\
+0 & 0 & 1 \\
+\end{pmatrix}\text{, and }
+V=
+\begin{pmatrix}
+-1 & 0 & 0 \\
+0 & 0 & 1 \\
+0 & -1 & 0 \\
+\end{pmatrix}
+$$
+
+we verify with Mathematica that det($UV^T$) is indeed 1. The essential matrix is computed as  
+
+$$
+E = 
+\begin{pmatrix}
+-1/\sqrt{2} & -1/\sqrt{2} & 0 \\
+-1/\sqrt{2} & 1/\sqrt{2} & 0 \\
+0 & 0 & 1 \\
+\end{pmatrix}
+\begin{pmatrix}
+1 & 0 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 0 \\
+\end{pmatrix}
+\begin{pmatrix}
+-1 & 0 & 0 \\
+0 & 0 & 1 \\
+0 & -1 & 0 \\
+\end{pmatrix}^T
+=
+\begin{pmatrix}
+1/\sqrt{2} & 0 &1/\sqrt{2}\\
+1/\sqrt{2} & 0 & -1/\sqrt{2} \\
+0 & 0 & 0 \\
+\end{pmatrix}
+$$
+
+Verifying that $x_1=(2,0)^T$ and $x_2=(-1,3)^T$ is a plausible correspondence we compute
+
+$$
+x_2^TEx_1 = 
+\begin{pmatrix}
+-1 & 3 & 1
+\end{pmatrix}
+\begin{pmatrix}
+1/\sqrt{2} & 0 &1/\sqrt{2}\\
+1/\sqrt{2} & 0 & -1/\sqrt{2} \\
+0 & 0 & 0 \\
+\end{pmatrix}
+\begin{pmatrix}
+2 \\
+0 \\
+1 \\
+\end{pmatrix}
+=
+0
+$$
+
+which shows the case.
+
+If $x_1=(2,0)^T$ is the projection of $X$ in $P_1=[I\mid 0]$ we want to show that $X$ must be be one of the points
+
+$$
+X(s)=\begin{pmatrix}
+    2\\0\\1\\s
+\end{pmatrix}
+$$
+
+$$
+x_1 =
+\begin{pmatrix}
+    2\\0\\1
+\end{pmatrix}
+\sim P_1X = [I\mid 0]
+\begin{pmatrix}
+    X_1/X_4\\X_2/X_4\\X_3/X_4\\1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    X_1/X_4\\X_2/X_4\\X_3/X_4
+\end{pmatrix}
+=
+\frac{1}{s}
+\begin{pmatrix}
+    2\\0\\1
+\end{pmatrix}
+$$
+
+which shows that $X$ that projects to $x_1$ must be one of the points $X(s)$.
+
+For each of the solutions
+$$
+P_2 = [UWV^T\mid u_3]\text{ or }P_2 = [UWV^T\mid -u_3]\text{ or }P_2 = [UW^TV^T\mid u_3]\text{ or }P_2 = [UW^TV^T\mid -u_3]
+$$
+
+where 
+
+$$ W=
+\begin{pmatrix}
+0 & -1 & 0 \\
+1 & 0 & 0 \\
+0 & 0 & 1\\
+\end{pmatrix}
+$$
+
+and $u_3$ is the third column of $U$, we want to compute $s$ such that $X(s)$ projects to $x_2=(1,-3)^T$. For $P_2 = [UWV^T\mid u_3]$ we have that
+
+$$
+ x_2= 
+\begin{pmatrix}
+    1 \\ -3 \\ 1
+\end{pmatrix}
+\sim
+P_2 X = 
+[UWV^T\mid u_3]
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+1/\sqrt{2} & 0 & -1/\sqrt{2} & 0 \\
+-1/\sqrt{2} & 0 & -1/\sqrt{2} & 0 \\
+0 & 1 & 0 & 1\\
+\end{pmatrix}
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    1/(\sqrt{2}s) \\ -3/(\sqrt{2}s) \\ 1
+\end{pmatrix}
+$$
+$$
+\Rightarrow s=1/\sqrt{2}
+$$
+
+For $P_2 = [UWV^T\mid -u_3]$ we have that
+
+$$
+x_2=
+\begin{pmatrix}
+    1 \\ -3 \\ 1
+\end{pmatrix}
+\sim
+P_2 X = 
+[UWV^T\mid -u_3]
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+1/\sqrt{2} & 0 & -1/\sqrt{2} & 0 \\
+-1/\sqrt{2} & 0 & -1/\sqrt{2} & 0 \\
+0 & 1 & 0 & -1\\
+\end{pmatrix}
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    1/(\sqrt{2}s) \\ -3/(\sqrt{2}s) \\ -1
+\end{pmatrix}
+$$
+$$
+\Rightarrow s=-1/\sqrt{2}
+$$
+
+For $P_2 = [UW^TV^T\mid u_3]$ we have that
+
+$$
+x_2=
+\begin{pmatrix}
+    1 \\ -3 \\ 1
+\end{pmatrix}
+\sim
+P_2 X = 
+[UW^TV^T\mid u_3]
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+-1/\sqrt{2} & 0 & 1/\sqrt{2} & 0 \\
+1/\sqrt{2} & 0 & 1/\sqrt{2} & 0 \\
+0 & 1 & 0 & 1\\
+\end{pmatrix}
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    -1/\sqrt{2}s) \\ 3/(\sqrt{2}s) \\ 1
+\end{pmatrix}
+$$
+$$
+\Rightarrow s=-1/\sqrt{2}
+$$
+
+Finally, for $P_2 = [UW^TV^T\mid -u_3]$ we have that
+
+$$
+x_2= 
+\begin{pmatrix}
+    1 \\ -3 \\ 1
+\end{pmatrix}
+\sim
+P_2 X = 
+[UW^TV^T\mid -u_3]
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+-1/\sqrt{2} & 0 & 1/\sqrt{2} & 0 \\
+1/\sqrt{2} & 0 & 1/\sqrt{2} & 0 \\
+0 & 1 & 0 & -1\\
+\end{pmatrix}
+\begin{pmatrix}
+    2/s \\ 0 \\ 1/s \\ 1
+\end{pmatrix}
+=
+\begin{pmatrix}
+    -1/(\sqrt{2}s) \\ 3/(\sqrt{2}s) \\ -1
+\end{pmatrix}
+$$
+$$
+\Rightarrow s=1/\sqrt{2}
+$$
+
+For $X(s)$ to be in front of a pair of calibrated cameras, such that each camera $P[R\mid t]$ has det($R$)=1, the depth of the scaled projected point in both cameras must be positive since $P_1$ is located in the origin and faces the positive direction of the $z$-axis. $P_1$ and all solutions for $P_2$ are calibrated cameras with det($R$)=1. The solutions for $P_2$ that gives positive $z$-coordinates after projection in the second camera is $P_2 = [UWV^T\mid u_3]$ and $P_2 = [UW^TV^T\mid u_3]$. However, only $s=1/\sqrt{2}$ yields a positive $z$-coordinate in $P_1$. Thus, the only choice of $P_2$ that yields $X(s)$ in front of both $P_1$ and $P_2$ is $P_2 = [UWV^T\mid u_3]$.
+
+
+\subsection*{Computer Exercise 3}
+
+
+ The projected poings align with the image points.
+
+The 3D reconstruction looks reasonable and looks like expected.
+
+
+\subsection*{Computer Exercise 3}
+
+Figure \ref{fig:ce3-k1} and \ref{fig:ce3-k2} show the two images, the same 20 random points as in Computer Exercise 1 and 2 and their corresponding epipolar lines. We can observe that the points are reasonably close to the lines and that the point-to-line distance in pixels is identical to in Computer Exercise 2, in fact the mean error is 2.08 pixels for both images.
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE3_kronan1.png}
+     \caption{View from the first camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce3-k1}
+ \end{figure}
+
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE3_kronan2.png}
+     \caption{View from the second camera, 20 random points and their corresponding epipolar lines.}
+     \label{fig:ce3-k2}
+ \end{figure}
+
+ Figure \ref{fig:ce3-hist1}, \ref{fig:ce3-hist2} and \ref{fig:ce3-histtot} show histograms of the distance (error) between the points and their corresponding epipolar lines. The errors are identical to the errors in Computer Exercise 2. This shows that there is no loss of information when projecting the triangulated 3D points using the extracted valid camera from $E$.
+ 
+ \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE3_hist_1.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the first image. The mean distance is $\approx 1.98$.}
+     \label{fig:ce3-hist1}
+ \end{figure}
+
+  \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE3_hist_2.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in the second image. The mean distance is $\approx 2.08$.}
+     \label{fig:ce3-hist2}
+ \end{figure}
+
+   \begin{figure}[H]
+     \centering
+     \includegraphics[width=0.8\linewidth]{CE3_hist_tot.png}
+     \caption{Histogram with 100 bins of the distance (error) from the random points and their corresponding epipolar lines in both images. The mean distance is $\approx 2.03$.}
+     \label{fig:ce3-histtot}
+ \end{figure}
+
+
+Figure \ref{fig:ce3-f}, \ref{fig:ce3-a} and \ref{fig:ce3-l} show a 3D reconstruction from triangulation using the only valid extracted camera from the estimated essential matrix. The 3D reconstruction looks reasonable and similar to the object in the images. Camera 1 faces the object from left and below, and camera 2 faces the object from the right and below as expected from the images.
+ 
+   \begin{figure}[H]
+     \centering
+     \includegraphics[width=1\linewidth]{CE3_3D_front.png}
+     \caption{3D reconstruction of the points from triangulation using the extracted camera from the estimated $E$. View from in front of the object.}
+     \label{fig:ce3-f}
+ \end{figure}
+
+    \begin{figure}[H]
+     \centering
+     \includegraphics[width=1\linewidth]{CE3_3D_above.png}
+     \caption{3D reconstruction of the points from triangulation using the extracted camera from the estimated $E$. View from above the object.}
+     \label{fig:ce3-a}
+ \end{figure}
+
+    \begin{figure}[H]
+     \centering
+     \includegraphics[width=1\linewidth]{CE3_3D_left.png}
+     \caption{3D reconstruction of the points from triangulation using the extracted camera from the estimated $E$. View from the left of the object.}
+     \label{fig:ce3-l}
+ \end{figure}
+
+
+\end{document}
