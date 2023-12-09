@@ -352,26 +352,6 @@ def convert_E_to_F(E, K1, K2):
     F = F / F[-1,-1]
     return F
 
-def extract_valid_camera_and_points(P1, P_arr, X_arr):
-        
-    x1_arr = np.array([cv.transform(P1, X) for X in X_arr])
-    valid_coords_P1 = np.array([np.sum(x[-1] > 0) for x in x1_arr])
-
-    x2_arr = np.array([cv.transform(P_arr[i], X_arr[i]) for i in range(np.size(P_arr, 0))])
-    valid_coords_P2 = np.array([np.sum(x[-1] > 0) for x in x2_arr]) 
-
-    valid_coords = valid_coords_P1 + valid_coords_P2
-    valid_coords_ind = np.argmax(valid_coords)
-    X_valid = X_arr[valid_coords_ind]
-    P2_valid = P_arr[valid_coords_ind]
-
-    return P2_valid, X_valid
-
-def compute_epipolar_lines(F, x1, x2):
-    l2 = F @ x1
-    l1 = F.T @ x2
-    return l1, l2
-
 def compute_and_plot_lines(l, img, ax):
 
     col = cm.rainbow(np.linspace(0, 1, np.size(l,1)))
@@ -387,37 +367,39 @@ def compute_and_plot_lines(l, img, ax):
 
         ax.plot(x, y, '-', lw=3, color=col[i], alpha=0.7) #  label='Line {}'.format(i+1)
 
-def compute_point_line_distance_2D(l, p):
-
-    D = []
-    for i in range(np.size(l,1)):
-
-        a = l[0,i]
-        b = l[1,i]
-        c = l[2,i]
-
-        x = p[0,i]
-        y = p[1,i]
-
-        d = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
-        D.append([d])   
-        
-    D = np.concatenate(D, 0)
-    return D
-
 def compute_RMS_error(D1, D2):
     e_rms = np.sqrt(np.sum(D1**2 + D2**2) / (2*np.size(D1, 0)))
     return e_rms
 
-def compute_epipolar_errors(F, x1, x2):
+def compute_point_line_distance_2D(l, p):
+    # a = l[0,:]
+    # b = l[1,:]
+    # c = l[2,:]
 
+    # x = p[0,:]
+    # y = p[1,:]
+
+    # D = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
+
+    numerator = np.abs(np.einsum("ij, ij->j", p, l))
+    denominator = np.linalg.norm(l[:-1], axis=0)
+    D = numerator / denominator
+
+    return D
+
+def compute_epipolar_lines(F, x1, x2):
+    # l3 = F @ x1
+    # l4 = F.T @ x2
+
+    l2 = np.einsum("ij,jk->ik", F, x1)
+    l1 = np.einsum("ji,jk->ik", F, x2)
+    return l1, l2
+
+def compute_epipolar_errors(F, x1, x2):
     l1, l2 = compute_epipolar_lines(F, x1, x2)
     D1 = compute_point_line_distance_2D(l1, x1)
     D2 = compute_point_line_distance_2D(l2, x2)
-    # D_tot = np.concatenate((D1,D2),0)
-    e_rms = compute_RMS_error(D1, D2)
-
-    return D1, D2, e_rms
+    return D1, D2
 
 def RQ_decompose(a):
 
@@ -450,6 +432,8 @@ def compute_sift_points(img1, img2, marg):
     flann = cv2.FlannBasedMatcher(index_params, search_params)
     matches = flann.knnMatch(des1, des2, k=2)
 
+    print('Number of matches:', np.size(matches,0))
+
     good_matches = []
     for m, n in matches:
         if m.distance < marg*n.distance:
@@ -458,17 +442,34 @@ def compute_sift_points(img1, img2, marg):
     draw_params = dict(matchColor=(255,0,255), singlePointColor=(0,255,0), matchesMask=None, flags=cv2.DrawMatchesFlags_DEFAULT)
     img_match = cv2.drawMatchesKnn(img1, kp1, img2, kp2, good_matches, None, **draw_params)
 
-    img1_pts = np.float32([kp1[match[0].queryIdx].pt for match in good_matches])
-    img2_pts = np.float32([kp2[match[0].trainIdx].pt for match in good_matches])
+    img1_pts = np.stack([kp1[match[0].queryIdx].pt for match in good_matches],1)
+    img2_pts = np.stack([kp2[match[0].trainIdx].pt for match in good_matches],1)
 
-    print('Number of good matches:', np.size(img1_pts,0))
+    print('Number of good matches:', np.size(img1_pts,1))
 
     return img1_pts, img2_pts, img_match
 
 def get_sift_plot_points(img1_pts, img2_pts, img1):
-    x = [img1_pts[:,0], np.size(img1,1)+img2_pts[:,0]]
-    y = [img1_pts[:,1], img2_pts[:,1]]
+    x = [img1_pts[0,:], np.size(img1,1)+img2_pts[0,:]]
+    y = [img1_pts[1,:], img2_pts[1,:]]
     return x, y
+
+def plot_sift_points(x1, x2, img1, img_match, path, save=False):
+    x, y = get_sift_plot_points(x1, x2, img1)
+
+    fig = plt.figure(figsize=(18,9))
+    ax = plt.axes()
+
+    ax.plot(x, y, 'o-', ms=5, lw=1, color='magenta')
+    ax.set_xlabel('$x$')
+    ax.set_ylabel('$y$')
+    ax.set_aspect('equal')
+    # ax.legend(loc="upper right")
+    ax.imshow(cv2.cvtColor(img_match, cv2.COLOR_BGR2RGB))
+    fig.tight_layout()
+    if save:
+        fig.savefig(path, dpi=300)
+    plt.show()
 
 def point_line_distance_2D(l, p):
     a = l[0]
@@ -480,6 +481,66 @@ def point_line_distance_2D(l, p):
 
     d = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
     return d
+
+def get_skew_vector(T):
+    t = np.array([T[2,1], T[0,2], T[1,0]])
+    return t
+
+def extract_valid_camera_and_points(P1, P_arr, X_arr):
+        
+    x1_arr = np.array([transform(P1, X) for X in X_arr])
+    valid_coords_P1 = np.array([np.sum(x[-1] > 0) for x in x1_arr])
+
+    x2_arr = np.array([transform(P_arr[i], X_arr[i]) for i in range(np.size(P_arr, 0))])
+    valid_coords_P2 = np.array([np.sum(x[-1] > 0) for x in x2_arr]) 
+
+    valid_coords = valid_coords_P1 + valid_coords_P2
+    valid_coords_ind = np.argmax(valid_coords)
+    X_valid = X_arr[valid_coords_ind]
+    P2_valid = P_arr[valid_coords_ind]
+    
+    print('No. valid coords for each camera pair:', valid_coords)
+    print('Argmax(P2_arr):', valid_coords_ind)
+
+    return P2_valid, X_valid
+
+def get_canonical_camera():
+    P = np.concatenate((np.eye(3), np.zeros(3)[:,np.newaxis]), 1)
+    return P
+
+def extract_P_from_E(E):
+
+    U, S, VT = np.linalg.svd(E, full_matrices=False)
+    # print(U @ np.diag([1,1,0] @ VT))
+    print(S)
+
+    if np.linalg.det(U @ VT) < 0:
+        VT = -VT
+
+    W = np.array([[0,1,0],[-1,0,0],[0,0,1]])
+    Z = np.array([[0,-1,0],[1,0,0],[0,0,0]])
+
+    S1 = U @ Z @ U.T
+    S2 = U @ Z.T @ U.T
+
+    R1 = U @ W @ VT
+    R2 = U @ W.T @ VT
+
+    t1 = get_skew_vector(S1)
+    t2 = get_skew_vector(S2)
+
+    P1 = np.concatenate((R1, t1[:, np.newaxis]), 1)
+    P2 = np.concatenate((R1, t2[:, np.newaxis]), 1)
+    P3 = np.concatenate((R2, t1[:, np.newaxis]), 1)
+    P4 = np.concatenate((R2, t2[:, np.newaxis]), 1)
+
+    P_arr = np.array([P1, P2, P3, P4])
+    return P_arr
+
+def compute_average_error(x_proj, x_img):
+    err = ((x_proj[0,:] - x_img[0,:])**2 + (x_proj[1,:] - x_img[1,:])**2)**0.5
+    avg_err = np.sum(err) / np.size(err,0)
+    return avg_err
 
 def remove_error_2P_points(x_proj, x_img, err):
 
