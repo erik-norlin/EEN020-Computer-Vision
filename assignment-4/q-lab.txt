@@ -1,0 +1,3 @@
+How to compute epsilon for ransac given 7000 points?
+How to make estimate_E_robust faster?
+How to get better sift points?

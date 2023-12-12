@@ -372,18 +372,18 @@ def compute_RMS_error(D1, D2):
     return e_rms
 
 def compute_point_line_distance_2D(l, p):
-    # a = l[0,:]
-    # b = l[1,:]
-    # c = l[2,:]
+    a = l[0,:]
+    b = l[1,:]
+    c = l[2,:]
 
-    # x = p[0,:]
-    # y = p[1,:]
+    x = p[0,:]
+    y = p[1,:]
 
-    # D = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
+    D = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
 
-    numerator = np.abs(np.einsum("ij, ij->j", p, l))
-    denominator = np.linalg.norm(l[:-1], axis=0)
-    D = numerator / denominator
+    # numerator = np.abs(np.einsum("ij, ij->j", p, l))
+    # denominator = np.linalg.norm(l[:-1], axis=0)
+    # D = numerator / denominator
 
     return D
 

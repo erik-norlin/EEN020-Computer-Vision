@@ -1,0 +1,307 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[left=2.5cm,top=2cm,right=2.5cm,bottom=2cm,nofoot]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[UKenglish]{babel}
+\usepackage[UKenglish]{isodate}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{systeme}
+\usepackage{booktabs}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{icomma}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage[parfill]{parskip}
+\usepackage[title,titletoc]{appendix}
+\usepackage{multicol}
+\usepackage{float}
+\usepackage{gensymb}
+\usepackage{url}
+\usepackage{subcaption}
+\usepackage{esvect}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{cancel}
+\usepackage{comment}
+\usepackage{makecell}
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\usepackage[numbered,framed]{matlab-prettifier}
+\definecolor{mygreen}{RGB}{28,172,0} % color values Red, Green, Blue
+\definecolor{mylilas}{RGB}{170,55,241}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstdefinelanguage{Julia}%
+  {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,%
+      end,export,false,for,function,immutable,import,importall,if,in,%
+      macro,module,otherwise,quote,return,switch,true,try,type,typealias,%
+      using,while},%
+   sensitive=true,%
+   alsoother={\$},%
+   morecomment=[l]\#,%
+   morecomment=[n]{\#=}{=\#},%
+   morestring=[s]{"}{"},%
+   morestring=[m]{'}{'},%
+}[keywords,comments,strings]%
+
+\lstset{%
+    language         = Julia,
+    basicstyle       = \ttfamily,
+    keywordstyle     = \bfseries\color{blue},
+    stringstyle      = \color{magenta},
+    commentstyle     = \color{ForestGreen},
+    showstringspaces = false,
+}
+\lstset{style=mystyle}
+\pagestyle{myheadings}
+\pagenumbering{empty}
+
+\title{Assignment 4 EEN020 Computer Vision}
+\author{Erik Norlin}
+\date{\today}
+
+\begin{document}
+\cleanlookdateon
+\maketitle
+\begin{center}
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{cc}
+\end{tabular}
+
+\end{center}
+\vspace{1.0cm}
+
+\pagenumbering{arabic}
+
+
+\section*{Robust Epipolar Geometry and Two-View Reconstruction}
+\subsection*{Theoretical Exercise 1}
+We have the camera pair
+
+$$ 
+P_1 = [R_1\mid t_1]\text{, and }
+P_2 = [R_2\mid t_2]
+$$
+
+Since there is projective ambiguity we can transform the cameras. However, the cameras are calibrated hence the first $3\times 3$ submatrix of the resulting transformation must be a rotation. We transform the camera pair with 
+
+$$
+H =
+\begin{bmatrix}
+R_1^T & -R_1^Tt_1 \\
+\textbf{0} & 1 
+\end{bmatrix}
+$$
+
+we get that 
+
+$$
+P_1H = [R_1\mid t_1] 
+\begin{bmatrix}
+R_1^T & -R_1^Tt_1 \\
+\textbf{0} & 1 
+\end{bmatrix}
+=
+[I\mid \textbf{0}]
+$$
+$$
+P_2H = [R_2\mid t_2] 
+\begin{bmatrix}
+R_1^T & -R_1^Tt_1 \\
+\textbf{0} & 1 
+\end{bmatrix}
+=
+[R_2R_1^T\mid -R_2R_1^Tt_1+t_2] = [R\mid t]
+$$
+
+The essential matrix of the transformed camera pair is 
+
+$$
+E = [t]_\times R
+$$
+
+where $t=-R_2R_1^Tt_1+t_2$ and $R=R_2R_1^T$ is a rotation.
+
+
+\subsection*{Theoretical Exercise 2}
+
+The essential matrix is defined up to scale, has determinant zero, and has two equal singular values. Since it has 9 parameters and the above 4 constraints the essential matrix has therefore 5 dofs. Because of this, it is really only necessary to have 5 points to determine it, which is what the 5-point algorithm exploits. The 8-point algorithm on the other hand needs 8-points, as in the name, to determine $E$ because the constraint on the determinant and its singular values are not imposed in this case, only the constraint on scalability.
+
+If the proportion of incorrect correspondences is 25\%, to calculate the number of iterations of RANSAC with an eight point solver we need to find an outlier free sample set with 99\% probability is
+
+$$
+T = \ceil*{\frac{\ln(1-\alpha)}{\ln (1-\epsilon^s)}}= \ceil*{\frac{\ln(1-0.99)}{\ln \left(1-\left(\frac{3}{4}\right)^8\right)}} = 44 \text{ iterations.}
+$$
+
+\subsection*{Computer Exercise 1}
+
+Estimating the essential matrix $E$ with all 6822 points we get that the RMS distance between the image points ($x_1$ and $x_2$) and corresponding epipolar lines ($l_1$ and $l_2$, respectively) is 155.96. Figures \ref{fig:ce1-hist1-rf} and \ref{fig:ce1-hist2-rf} show histograms of the point-to-line distance in pixels  (error) from the image points to the epipolar lines for both images respectively when estimating $E$ with all points. The error is large for both images with means of 61.33 and 63.47 pixels respectively. Reason for these large errors is due to the set of image points containing outliers.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist1_ransac=False_all_points_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the first image when estimating $E$ with all points. The mean error is 61.33 pixels.}
+    \label{fig:ce1-hist1-rf}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist2_ransac=False_all_points_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the second image when estimating $E$ with all points. The mean error is 63.47 pixels.}
+    \label{fig:ce1-hist2-rf}
+\end{figure}
+
+Figures \ref{fig:ce1-img1-rf} and \ref{fig:ce1-img2-rf} show the two images, 20 random image points and their corresponding epipolar lines. From observation it is noticeable that the epipolar lines do not lie satisfyingly close to the image points. Again, the reason for this is that there are outliers in the set of image points.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church1_ransac=False_1.png}
+    \caption{Plot of the first image, 20 random image points and their corresponding epipolar lines.}
+    \label{fig:ce1-img1-rf}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church2_ransac=False_1.png}
+    \caption{Plot of the second image, 20 random image points and their corresponding epipolar lines.}
+    \label{fig:ce1-img2-rf}
+\end{figure}
+
+% All points:
+% Ransac: False
+% Mean distance 1: 61.33360616690827
+% Mean distance 2: 63.46892741628846
+% RMS error: 155.95832290161417
+
+% Inliers:
+% Ransac: False
+% Mean distance 1: 16.405076850386244
+% Mean distance 2: 17.255170603651873
+% RMS error: 24.840289353844906
+% No. inliers: 5808
+
+The errors are greatly decreased by using RANSAC to robustly estimate $E$. Computing the errors with the 5808 obtained inliers and the robustly estimated $E$ using an error threshold of two pixels, we get that an RMS distance of 0.38. Figures \ref{fig:ce1-hist1-rt} and \ref{fig:ce1-hist2-rt} show histograms of the point-to-line distance between the image points and corresponding epipolar lines in the images with mean distances of 0.27 and 0.30 pixels. These are huge improvements and shows that robustly estimating $E$ using RANSAC has a significant effect.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist1_ransac=True_inliers_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the first image when estimating $E$ with only inliers. The mean error is 0.27 pixels.}
+    \label{fig:ce1-hist1-rt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist2_ransac=True_inliers_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the second image when estimating $E$ with only inliers. The mean error is 0.30 pixels.}
+    \label{fig:ce1-hist2-rt}
+\end{figure}
+
+Figures \ref{fig:ce1-img1-rt} and \ref{fig:ce1-img2-rt} show the two images, 20 random inliers and their corresponding epipolar lines. From inspection we can see that the epipolar lines fall on the image points. This is because the outliers have been excluded this time.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church1_ransac=True_1.png}
+    \caption{Plot of the first image, 20 random inliers and their corresponding epipolar lines.}
+    \label{fig:ce1-img1-rt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church2_ransac=True_1.png}
+    \caption{Plot of the second image, 20 random inliers and their corresponding epipolar lines.}
+    \label{fig:ce1-img2-rt}
+\end{figure}
+
+% All points:
+% Ransac: True
+% Mean distance 1: 58.218871126293756
+% Mean distance 2: 71.45505427055761
+% RMS error: 211.08275098532155
+
+% Inliers:
+% Ransac: True
+% Mean distance 1: 0.2689665486285598
+% Mean distance 2: 0.30710082051218507
+% RMS error: 0.377877330889468
+% No. inliers: 5808
+
+\subsection*{Computer Exercise 2}
+
+Table \ref{tab:points} shows the number of points found in the first image, second image, the number of matches between the images, and the number of inliers after running the RANSAC algorithm for 100,000 iterations with a threshold error of 4 pixels.
+
+\begin{table}[H]
+    \centering
+        \caption{The number of points found in each images and the number of matches using SIFT (VLFEAT), and the number of inliers from using RANSAC.}
+            \begin{tabular}{p{0.12\textwidth}|p{0.13\textwidth}}
+            \toprule
+             & No. points \\
+            \midrule
+            fountain1 & 39561 \\
+            fountain2 & 38775 \\
+            Matches & 2604 \\
+            Inliers & 1840 \\
+            \bottomrule            
+    \end{tabular}
+    \label{tab:points}
+\end{table}
+
+Figures \ref{fig:ce2-p2-0}, \ref{fig:ce2-p2-1}, \ref{fig:ce2-p2-2}, and \ref{fig:ce2-p2-3} show the four different solutions of the second camera with the corresponding 3D reconstructions. From inspection, the second solution (Figure \ref{fig:ce2-p2-1}) must indeed be the correct solution because it is the only solution that yields expected camera positions and directions pointing toward the 3D reconstruction with a 3D reconstruction that makes sense and is similar to what can be seen in the images. The computation tells us that the solution that yields the most points in front of both cameras is the second solution of the second camera which implies the correct solution, and this is aligned with the observation of the figures.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_0_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of the second camera.}
+    \label{fig:ce2-p2-0}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_1_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of the second camera. Camera 1 faces the object from the right and the camera 2 faces the object from the left as expected, and the 3D reconstruction is similar to the object in the images.}
+    \label{fig:ce2-p2-1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_2_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of the second camera.}
+    \label{fig:ce2-p2-2}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_3_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of the second camera.}
+    \label{fig:ce2-p2-3}
+\end{figure}
+
+
+\end{document}
