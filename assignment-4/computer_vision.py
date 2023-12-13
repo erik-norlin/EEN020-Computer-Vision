@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import linalg as LA
 from scipy.io import loadmat
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
@@ -6,6 +7,7 @@ import matplotlib.image as mpimg
 import matplotlib as mpl
 from matplotlib.pyplot import cm
 import cv2
+from tqdm import trange
 from icecream import ic
 
 
@@ -37,13 +39,13 @@ def normalize_vector(v):
 def compute_camera_center(P):
     M = P[:,:3]
     P4 = P[:,-1]
-    C = -1*(np.linalg.inv(M) @ P4)
+    C = -1*(LA.inv(M) @ P4)
     return C
 
 def compute_normalized_principal_axis(P):
     M = P[:,:3]
     m3 = P[-1,:3]
-    v = np.linalg.det(M) * m3
+    v = LA.det(M) * m3
     return normalize_vector(v)
 
 def compute_camera_center_and_normalized_principal_axis(P):
@@ -70,7 +72,7 @@ def compute_homography(P, pi, K):
     R = P[:,:3]
     t = P[:,-1]
     H = R - np.outer(t, np.transpose(pi[:-1]))
-    H_tot = K @ H @ np.linalg.inv(K)
+    H_tot = K @ H @ LA.inv(K)
     return H, H_tot
 
 def transform_image(img, H):
@@ -80,7 +82,7 @@ def transform_image(img, H):
     return transf_img
 
 def uncalibrate(p_cal, K):
-    p_uncal = np.linalg.inv(K) @ p_cal
+    p_uncal = LA.inv(K) @ p_cal
     return p_uncal
 
 def calibrate(p_uncal, K):
@@ -158,7 +160,7 @@ def check_mean_and_std(x):
 #         M.append(m)
 
 #     M = np.concatenate(M, 0)
-#     U, S, VT = np.linalg.svd(M, full_matrices=False)
+#     U, S, VT = LA.svd(M, full_matrices=False)
 #     M_approx = U @ np.diag(S) @ VT
 
 #     v = VT[-1,:] # last row of VT because optimal v should be last column of V
@@ -198,7 +200,7 @@ def estimate_camera_DLT(Xmodel, img_pts, print_svd=False):
         M.append(m)
 
     M = np.concatenate(M, 0)
-    U, S, VT = np.linalg.svd(M, full_matrices=False)
+    U, S, VT = LA.svd(M, full_matrices=False)
     P = np.stack([VT[-1, i:i+4] for i in range(0, 12, 4)], 0)
 
     if print_svd:
@@ -230,7 +232,7 @@ def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, print_svd=False):
                       [P2[0,0]-x2*P2[2,0], P2[0,1]-x2*P2[2,1], P2[0,2]-x2*P2[2,2], P2[0,3]-x2*P2[2,3]],
                       [P2[1,0]-y2*P2[2,0], P2[1,1]-y2*P2[2,1], P2[1,2]-y2*P2[2,2], P2[1,3]-y2*P2[2,3]]])
 
-        U, S, VT = np.linalg.svd(M, full_matrices=False)
+        U, S, VT = LA.svd(M, full_matrices=False)
         X.append(VT[-1,:])
         
         if print_svd:
@@ -242,12 +244,16 @@ def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, print_svd=False):
             print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
             print('S:', S)
 
-    X = np.stack(X,1)
+    X = dehomogenize(np.stack(X,1))
     return X
 
+def get_triangulated_X_from_extracted_P2_solutions(P1, P2_arr, x1_norm, x2_norm):
+    X_arr = np.array([triangulate_3D_point_DLT(P1, P2, x1_norm, x2_norm, print_svd=False) for P2 in P2_arr])
+    return X_arr
+
 def enforce_fundamental(F):
-    U, S, VT = np.linalg.svd(F, full_matrices=False)
-    # if np.linalg.det(U @ VT) < 0:
+    U, S, VT = LA.svd(F, full_matrices=False)
+    # if LA.det(U @ VT) < 0:
     #     VT = -VT
     S[-1] = 0
     F = U @ np.diag(S) @ VT
@@ -277,7 +283,7 @@ def estimate_F_DLT(img_pts_1, img_pts_2, enforce=False, verbose=False): # Comput
 
 
     M = np.concatenate(M, 0)
-    U, S, VT = np.linalg.svd(M, full_matrices=False)
+    U, S, VT = LA.svd(M, full_matrices=False)
     F = VT[-1,:].reshape(3,3)
     if enforce:
         F = enforce_fundamental(F)
@@ -287,7 +293,7 @@ def estimate_F_DLT(img_pts_1, img_pts_2, enforce=False, verbose=False): # Comput
             epi_const = img_pts_2[:,i].T @ F @ img_pts_1[:,i]
             print('x2^T @ F @ x1:', epi_const)
         
-        print('\nDet(F):', np.linalg.det(F))
+        print('\nDet(F):', LA.det(F))
         M_approx = U @ np.diag(S) @ VT
         v = VT[-1,:] # last row of VT because optimal v should be last column of V
         Mv = M @ v
@@ -300,8 +306,8 @@ def estimate_F_DLT(img_pts_1, img_pts_2, enforce=False, verbose=False): # Comput
     return F
 
 def enforce_essential(E):
-    U, _, VT = np.linalg.svd(E, full_matrices=False)
-    if np.linalg.det(U @ VT) < 0:
+    U, _, VT = LA.svd(E, full_matrices=False)
+    if LA.det(U @ VT) < 0:
         VT = -VT
     E =  U @ np.diag([1,1,0]) @ VT
     return E
@@ -319,7 +325,7 @@ def estimate_E_DLT(img_pts_1, img_pts_2, enforce=False, verbose=False):
         M.append([m])
 
     M = np.concatenate(M, 0)
-    U, S, VT = np.linalg.svd(M, full_matrices=False)
+    U, S, VT = LA.svd(M, full_matrices=False)
     E = VT[-1,:].reshape(3,3)
     if enforce:
         E = enforce_essential(E)
@@ -329,7 +335,7 @@ def estimate_E_DLT(img_pts_1, img_pts_2, enforce=False, verbose=False):
             epi_const = img_pts_2[:,i].T @ E @ img_pts_1[:,i]
             print('x2^T @ E @ x1:', epi_const)
         
-        print('\nDet(E):', np.linalg.det(E))
+        print('\nDet(E):', LA.det(E))
         M_approx = U @ np.diag(S) @ VT
         v = VT[-1,:] # last row of VT because optimal v should be last column of V
         Mv = M @ v
@@ -341,6 +347,36 @@ def estimate_E_DLT(img_pts_1, img_pts_2, enforce=False, verbose=False):
     E = E/E[-1,-1]
     return E
 
+def estimate_E_robust(K, x1_norm, x2_norm, n_its, n_samples, err_threshold_px):
+    
+    err_threshold = err_threshold_px / K[0,0]
+    best_inliers = None
+    best_E = None
+    max_inliers = 0
+
+    for t in trange(n_its):
+
+        rand_mask = np.random.choice(np.size(x1_norm,1), n_samples, replace=False)
+        E = estimate_E_DLT(x1_norm[:,rand_mask], x2_norm[:,rand_mask], enforce=True, verbose=False)
+
+        D1, D2 = compute_epipolar_errors(E, x1_norm, x2_norm)
+        inliers = ((D1**2 + D2**2) / 2) < err_threshold**2
+
+        n_inliers = np.sum(inliers)
+
+        if n_inliers > max_inliers:
+            best_inliers = np.copy(inliers)
+            best_E = np.copy(E)
+            max_inliers = n_inliers
+
+            print(np.sum(inliers), end='\r')
+        
+    return best_E, best_inliers
+
+def compute_ransac_iterations(alpha, epsilon, s):
+    T = np.ceil(np.log(1-alpha) / np.log(1-epsilon**s))
+    return T
+
 def normalize_camera(P):
     P= P/P[-1,-1]
     if P[2,2] < 0:
@@ -348,7 +384,7 @@ def normalize_camera(P):
     return P
 
 def convert_E_to_F(E, K1, K2):
-    F = np.linalg.inv(K2).T @ E @ np.linalg.inv(K1)
+    F = LA.inv(K2).T @ E @ LA.inv(K1)
     F = F / F[-1,-1]
     return F
 
@@ -382,7 +418,7 @@ def compute_point_line_distance_2D(l, p):
     D = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
 
     # numerator = np.abs(np.einsum("ij, ij->j", p, l))
-    # denominator = np.linalg.norm(l[:-1], axis=0)
+    # denominator = LA.norm(l[:-1], axis=0)
     # D = numerator / denominator
 
     return D
@@ -406,7 +442,7 @@ def RQ_decompose(a):
     m, n = a.shape
     e = np.eye(m)
     p = e[:, ::-1]
-    q0, r0 = np.linalg.qr(p @ a[:, :m].T @ p)
+    q0, r0 = LA.qr(p @ a[:, :m].T @ p)
 
     r = p @ r0.T @ p
     q = p @ q0.T @ p
@@ -416,21 +452,36 @@ def RQ_decompose(a):
     q = fix @ q
 
     if n > m:
-        q = np.concatenate((q, np.linalg.inv(r) @ a[:, m:n]), axis=1)
+        q = np.concatenate((q, LA.inv(r) @ a[:, m:n]), axis=1)
 
     return r, q
 
 def compute_sift_points(img1, img2, marg):
+    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    # img1 = cv2.medianBlur(img1, ksize = 5)
+    img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
+    # img1 = img1.astype(np.float32)
+
+    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    # img2 = cv2.medianBlur(img2, ksize = 5)
+    img2 = cv2.normalize(img2, None, 0, 255, cv2.NORM_MINMAX)
+    # img2 = img2.astype(np.float32)
+
+
+    # sift = cv2.SIFT_create(int nfeatures=0, int nOctaveLayers=3, double contrastThreshold=0.04, double edgeThreshold=10, double sigma=1.6)
     sift = cv2.SIFT_create()
     kp1, des1 = sift.detectAndCompute(img1, None)
     kp2, des2 = sift.detectAndCompute(img2, None)
 
-    FLANN_INDEX_KDTREE = 1
-    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-    search_params = dict(checks=50)   # or pass empty dictionary
+    # FLANN_INDEX_KDTREE = 1
+    # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+    # search_params = dict(checks=50)   # or pass empty dictionary
 
-    flann = cv2.FlannBasedMatcher(index_params, search_params)
-    matches = flann.knnMatch(des1, des2, k=2)
+    # flann = cv2.FlannBasedMatcher(index_params, search_params)
+    # matches = flann.knnMatch(des1, des2, k=2)
+
+    bf = cv2.BFMatcher()
+    matches = bf.knnMatch(des1, des2, k=2)
 
     print('Number of matches:', np.size(matches,0))
 
@@ -442,12 +493,15 @@ def compute_sift_points(img1, img2, marg):
     draw_params = dict(matchColor=(255,0,255), singlePointColor=(0,255,0), matchesMask=None, flags=cv2.DrawMatchesFlags_DEFAULT)
     img_match = cv2.drawMatchesKnn(img1, kp1, img2, kp2, good_matches, None, **draw_params)
 
-    img1_pts = np.stack([kp1[match[0].queryIdx].pt for match in good_matches],1)
-    img2_pts = np.stack([kp2[match[0].trainIdx].pt for match in good_matches],1)
+    x1 = np.stack([kp1[match[0].queryIdx].pt for match in good_matches],1)
+    x2 = np.stack([kp2[match[0].trainIdx].pt for match in good_matches],1)
 
-    print('Number of good matches:', np.size(img1_pts,1))
+    x1 = homogenize(x1, multi=True)
+    x2 = homogenize(x2, multi=True)
 
-    return img1_pts, img2_pts, img_match
+    print('Number of good matches:', np.size(x1,1))
+
+    return x1, x2, img_match
 
 def get_sift_plot_points(img1_pts, img2_pts, img1):
     x = [img1_pts[0,:], np.size(img1,1)+img2_pts[0,:]]
@@ -510,11 +564,11 @@ def get_canonical_camera():
 
 def extract_P_from_E(E):
 
-    U, S, VT = np.linalg.svd(E, full_matrices=False)
+    U, S, VT = LA.svd(E, full_matrices=False)
     # print(U @ np.diag([1,1,0] @ VT))
     print(S)
 
-    if np.linalg.det(U @ VT) < 0:
+    if LA.det(U @ VT) < 0:
         VT = -VT
 
     W = np.array([[0,1,0],[-1,0,0],[0,0,1]])
