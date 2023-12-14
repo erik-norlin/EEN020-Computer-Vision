@@ -1,0 +1,645 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[left=2.5cm,top=2cm,right=2.5cm,bottom=2cm,nofoot]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[UKenglish]{babel}
+\usepackage[UKenglish]{isodate}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{systeme}
+\usepackage{booktabs}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{icomma}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage[parfill]{parskip}
+\usepackage[title,titletoc]{appendix}
+\usepackage{multicol}
+\usepackage{float}
+\usepackage{gensymb}
+\usepackage{url}
+\usepackage{subcaption}
+\usepackage{esvect}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{cancel}
+\usepackage{comment}
+\usepackage{makecell}
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\usepackage[numbered,framed]{matlab-prettifier}
+\definecolor{mygreen}{RGB}{28,172,0} % color values Red, Green, Blue
+\definecolor{mylilas}{RGB}{170,55,241}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstdefinelanguage{Julia}%
+  {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,%
+      end,export,false,for,function,immutable,import,importall,if,in,%
+      macro,module,otherwise,quote,return,switch,true,try,type,typealias,%
+      using,while},%
+   sensitive=true,%
+   alsoother={\$},%
+   morecomment=[l]\#,%
+   morecomment=[n]{\#=}{=\#},%
+   morestring=[s]{"}{"},%
+   morestring=[m]{'}{'},%
+}[keywords,comments,strings]%
+
+\lstset{%
+    language         = Julia,
+    basicstyle       = \ttfamily,
+    keywordstyle     = \bfseries\color{blue},
+    stringstyle      = \color{magenta},
+    commentstyle     = \color{ForestGreen},
+    showstringspaces = false,
+}
+\lstset{style=mystyle}
+\pagestyle{myheadings}
+\pagenumbering{empty}
+
+\title{Assignment 4 EEN020 Computer Vision}
+\author{Erik Norlin}
+\date{\today}
+
+\begin{document}
+\cleanlookdateon
+\maketitle
+\begin{center}
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{cc}
+\end{tabular}
+
+\end{center}
+\vspace{1.0cm}
+
+\pagenumbering{arabic}
+
+
+\section*{Robust Epipolar Geometry and Two-View Reconstruction}
+\subsection*{Theoretical Exercise 1}
+We have the camera pair
+
+$$ 
+P_1 = [R_1\mid t_1]\text{, and }
+P_2 = [R_2\mid t_2]
+$$
+
+We transform the camera pair with 
+
+$$
+H =
+\begin{bmatrix}
+R_1^T & -R_1^Tt_1 \\
+\textbf{0} & 1 
+\end{bmatrix}
+$$
+
+we get that 
+
+$$
+P_1H = [R_1\mid t_1] 
+\begin{bmatrix}
+R_1^T & -R_1^Tt_1 \\
+\textbf{0} & 1 
+\end{bmatrix}
+=
+[I\mid \textbf{0}]
+$$
+$$
+P_2H = [R_2\mid t_2] 
+\begin{bmatrix}
+R_1^T & -R_1^Tt_1 \\
+\textbf{0} & 1 
+\end{bmatrix}
+=
+[R_2R_1^T\mid -R_2R_1^Tt_1+t_2] = [R\mid t]
+$$
+
+The essential matrix of the transformed camera pair is 
+
+$$
+E = [t]_\times R
+$$
+
+where $t=-R_2R_1^Tt_1+t_2$ and $R=R_2R_1^T$.
+
+
+\subsection*{Theoretical Exercise 2}
+
+The essential matrix is defined up to scale, has determinant zero, and has two equal singular values. Since it has 9 parameters with the above constraints, it loses 4 dofs. Hence, the essential matrix has 5 dofs. Because of this, it is really only necessary to have 5 points to determine it, which is what the 5-point algorithm exploits. The 8-point algorithm on the other hand needs 8-points, as in the name, to determine $E$ because the constraint on the determinant and its singular values are not imposed in the computation of this algorithm, only the constraint of scalability can be applied here.
+
+If the proportion of incorrect correspondences is 25\%, to calculate the number of iterations of RANSAC with an eight point solver we need to find an outlier free sample set with 99\% probability is
+
+$$
+T = \ceil*{\frac{\ln(1-\alpha)}{\ln (1-\epsilon^s)}}= \ceil*{\frac{\ln(1-0.99)}{\ln \left(1-\left(\frac{3}{4}\right)^8\right)}} = 44 \text{ iterations.}
+$$
+
+\subsection*{Computer Exercise 1}
+
+Estimating the essential matrix $E$ with all 6822 matched points we get that the RMS distance between the image points ($x_1$ and $x_2$) and corresponding epipolar lines ($l_1$ and $l_2$, respectively) is 155.96. Figures \ref{fig:ce1-hist1-rf} and \ref{fig:ce1-hist2-rf} show histograms of the point-to-line distance in pixels  (error) from the image points to the epipolar lines for both images respectively when estimating $E$ with all points. The error is large for both images with means of 61.33 and 63.47 pixels respectively. The reason for these large errors is due to the set of image points containing outliers.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist1_ransac=False_all_points_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the first image when estimating $E$ with all points. The mean error is 61.33 pixels.}
+    \label{fig:ce1-hist1-rf}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist2_ransac=False_all_points_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the second image when estimating $E$ with all points. The mean error is 63.47 pixels.}
+    \label{fig:ce1-hist2-rf}
+\end{figure}
+
+Figures \ref{fig:ce1-img1-rf} and \ref{fig:ce1-img2-rf} show the two images, the same 20 random image points and their corresponding epipolar lines. From observation it is noticeable that the epipolar lines do not lie satisfyingly close to the image points. Again, the reason for this is that there are outliers in the set of image points.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church1_ransac=False_1.png}
+    \caption{Plot of the first image, 20 random image points and their corresponding epipolar lines.}
+    \label{fig:ce1-img1-rf}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church2_ransac=False_1.png}
+    \caption{Plot of the second image, 20 random image points and their corresponding epipolar lines.}
+    \label{fig:ce1-img2-rf}
+\end{figure}
+
+% All points:
+% Ransac: False
+% Mean distance 1: 61.33360616690827
+% Mean distance 2: 63.46892741628846
+% RMS error: 155.95832290161417
+
+% Inliers:
+% Ransac: False
+% Mean distance 1: 16.405076850386244
+% Mean distance 2: 17.255170603651873
+% RMS error: 24.840289353844906
+% No. inliers: 5808
+
+The errors are greatly decreased by using RANSAC to robustly estimate $E$. Computing the errors with the 5808 obtained inliers and the robustly estimated $E$ using an error threshold of two pixels, we get that an RMS distance of 0.38. Figures \ref{fig:ce1-hist1-rt} and \ref{fig:ce1-hist2-rt} show histograms of the point-to-line distance between the image points and corresponding epipolar lines in the images with mean distances of 0.27 and 0.30 pixels. These huge improvements show that robustly estimating $E$ using RANSAC has a significant positive effect.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist1_ransac=True_inliers_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the first image when estimating $E$ with only inliers. The mean error is 0.27 pixels.}
+    \label{fig:ce1-hist1-rt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{CE1_hist2_ransac=True_inliers_1.png}
+    \caption{Histogram of the point-to-line distance in pixels (error) from the image points to the epipolar lines of the second image when estimating $E$ with only inliers. The mean error is 0.30 pixels.}
+    \label{fig:ce1-hist2-rt}
+\end{figure}
+
+Figures \ref{fig:ce1-img1-rt} and \ref{fig:ce1-img2-rt} show the two images, the same 20 random inliers and their corresponding epipolar lines. From inspection we can see that the epipolar lines fall on the image points. This is because the outliers have been excluded from the set of points both when plotting and estimating $E$. We can conclude that the estimated essential matrix using RANSAC gives better results because the outliers are excluded.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church1_ransac=True_1.png}
+    \caption{Plot of the first image, 20 random inliers and their corresponding epipolar lines.}
+    \label{fig:ce1-img1-rt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE1_round_church2_ransac=True_1.png}
+    \caption{Plot of the second image, 20 random inliers and their corresponding epipolar lines.}
+    \label{fig:ce1-img2-rt}
+\end{figure}
+
+% All points:
+% Ransac: True
+% Mean distance 1: 58.218871126293756
+% Mean distance 2: 71.45505427055761
+% RMS error: 211.08275098532155
+
+% Inliers:
+% Ransac: True
+% Mean distance 1: 0.2689665486285598
+% Mean distance 2: 0.30710082051218507
+% RMS error: 0.377877330889468
+% No. inliers: 5808
+
+\subsection*{Computer Exercise 2}
+
+Table \ref{tab:points} shows the number of points found in the first image, second image, the number of matches between the images, and the number of inliers obtained by running the RANSAC algorithm for 100,000 iterations with a threshold error of 4 pixels.
+
+\begin{table}[H]
+    \centering
+        \caption{The number of points found in each images and the number of matches using SIFT (VLFEAT), and the number of inliers from using RANSAC.}
+            \begin{tabular}{p{0.12\textwidth}|p{0.13\textwidth}}
+            \toprule
+             & No. points \\
+            \midrule
+            fountain1 & 39,561 \\
+            fountain2 & 38,775 \\
+            Matches & 2,604 \\
+            Inliers & 1,840 \\
+            \bottomrule            
+    \end{tabular}
+    \label{tab:points}
+\end{table}
+
+Figures \ref{fig:ce2-p2-0}, \ref{fig:ce2-p2-1}, \ref{fig:ce2-p2-2}, and \ref{fig:ce2-p2-3} show the four different solutions of the second camera with the corresponding 3D reconstructions. From inspection, the second solution (Figure \ref{fig:ce2-p2-1}) must indeed be the correct solution because it is the only solution that yields expected camera positions and directions pointing toward the 3D reconstruction with a 3D reconstruction that makes sense and is similar to what can be seen in the images. The computation tells us that the solution that yields the most points in front of both cameras is the second solution (Figure \ref{fig:ce2-p2-1}) which is aligned with the observation of the figures.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_0_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the first solution of camera 2.}
+    \label{fig:ce2-p2-0}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_1_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of camera 2. Camera 1 faces the object from the right and camera 2 faces the object from the left as expected, and the 3D reconstruction is similar to the object in the images.}
+    \label{fig:ce2-p2-1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_2_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of camera 2. The computer had trouble zooming in further than this.}
+    \label{fig:ce2-p2-2}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{CE2_3D_P2_3_2.1.png}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of the camera 2.}
+    \label{fig:ce2-p2-3}
+\end{figure}
+
+
+
+
+\section*{Levenberg-Marquardt for Structure from Motion Problems}
+\subsection*{Theoretical Exercise 3}
+\subsubsection*{a)}
+
+Given that
+
+$$
+\textbf{r}_i(X_j) = 
+\begin{pmatrix}
+x_{ij,1}-\frac{P_i^1\textbf{X}_j}{P_i^3\textbf{X}_j} \\
+\\
+x_{ij,2}-\frac{P_i^2\textbf{X}_j}{P_i^3\textbf{X}_j}
+\end{pmatrix} \in \mathbb{R}^{2\times 1}
+$$
+
+We compute the jacobian $J_i(\textbf{X}_j)$ of $\textbf{r}_i(\textbf{X}_j)$ by using the chain rule of derivatives as
+
+$$
+J_i(\textbf{X}_j) = 
+\begin{bmatrix}
+\frac{\partial \textbf{r}_{i,1}(\textbf{X}_j)}{\partial \textbf{X}_j} \\
+\\
+\frac{\partial \textbf{r}_{i,2}(\textbf{X}_j)}{\partial \textbf{X}_j} 
+\end{bmatrix}
+=
+\begin{bmatrix}
+-\left( P_i^1\textbf{X}_j \frac{\partial}{\partial \textbf{X}_j}(\frac{1}{P_i^3\textbf{X}_j}) + \frac{1}{P_i^3\textbf{X}_j}\frac{\partial}{\partial \textbf{X}_j}\left(P_i^1\textbf{X}_j\right)\right) \\
+\\
+-\left( P_i^2\textbf{X}_j \frac{\partial}{\partial \textbf{X}_j}(\frac{1}{P_i^3\textbf{X}_j}) + \frac{1}{P_i^3\textbf{X}_j}\frac{\partial}{\partial \textbf{X}_j}\left(P_i^2\textbf{X}_j\right)\right) \\
+\end{bmatrix}
+$$
+
+$$
+=
+\begin{bmatrix}
+-\left( -\frac{P_i^1\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 + \frac{1}{P_i^3\textbf{X}_j}P_i^1\right) \\
+\\
+-\left( -\frac{P_i^2\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 + \frac{1}{P_i^3\textbf{X}_j}P_i^2\right) \\
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{P_i^1\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 - \frac{1}{P_i^3\textbf{X}_j}P_i^1 \\
+\\
+\frac{P_i^2\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 - \frac{1}{P_i^3\textbf{X}_j}P_i^2
+\end{bmatrix}
+$$
+
+where $P_i^k\textbf{X}_j$ for $k=1,2,3$ are scalars, and $P_i^k$ for $k=1,2,3$ are row vectors of four columns. Hence, $J_i(\textbf{X}_j) \in \mathbb{R}^{2\times 4}$.
+
+
+\subsubsection*{b)}
+
+We know that $\textbf{r}_i(\textbf{X}_j) \in \mathbb{R}^{2\times 1}$ and $J_i(\textbf{X}_j) \in \mathbb{R}^{2\times 4}$. Expanding the linearized reprojection error yields
+
+$$
+\sum_{i=1}^m ||\textbf{r}_i(\textbf{X}_j)+ J_i(\textbf{X}_j)\delta \textbf{X}_j||^2
+$$
+
+$$
+=
+\sum_{i=1}^m [\textbf{r}_i(\textbf{X}_j)^T \textbf{r}_i(\textbf{X}_j) + 2\textbf{r}_i(\textbf{X}_j)^TJ_i(\textbf{X}_j)\delta \textbf{X}_j + \delta \textbf{X}_j^TJ_i(\textbf{X}_j)^TJ_i(\textbf{X}_j)\delta \textbf{X}_j]
+$$
+
+$$
+=
+\begin{bmatrix}
+\textbf{r}_1(\textbf{X}_j) \\
+\vdots \\
+\textbf{r}_m(\textbf{X}_j)
+\end{bmatrix}^T
+\begin{bmatrix}
+\textbf{r}_1(\textbf{X}_j) \\
+\vdots \\
+\textbf{r}_m(\textbf{X}_j)
+\end{bmatrix}
++2
+\begin{bmatrix}
+\textbf{r}_1(\textbf{X}_j) \\
+\vdots \\
+\textbf{r}_m(\textbf{X}_j)
+\end{bmatrix}^T
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix}
+\delta \textbf{X}_j+\delta \textbf{X}_j^T
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix}^T
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix}
+\delta \textbf{X}_j
+$$
+
+$$
+=
+\textbf{r}(\textbf{X}_j)^T \textbf{r}(\textbf{X}_j) + 2\textbf{r}(\textbf{X}_j)^TJ(\textbf{X}_j)\delta \textbf{X}_j + \delta \textbf{X}_j^TJ(\textbf{X}_j)^TJ(\textbf{X}_j)\delta \textbf{X}_j
+$$
+
+$$
+=
+||\textbf{r}(\textbf{X}_j) + J(\textbf{X}_j)\delta \textbf{X}_j||^2
+$$
+
+where 
+
+$$
+\textbf{r}(\textbf{X}_j) =
+\begin{bmatrix}
+r_1(\textbf{X}_j) \\
+\vdots \\
+r_m(\textbf{X}_j)
+\end{bmatrix} \in \mathbb{R}^{2m\times 1}
+\text{, and }
+J(\textbf{X}_j)=
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix} \in \mathbb{R}^{2m\times 4}
+$$\\
+
+
+
+
+\subsection*{Computer Exercise 3}
+
+Table \ref{tab:ce3-err} shows the total and median reprojection errors of the estimated 3D reconstruction $\textbf{X}$ from triangulation, and the same 3D reconstruction but optimized using Levenberg-Marquardt (LM). We can see that the optimized set of 3D points has lower total and median reprojection errors. It is not a drastic improvement but it still shows that optimizing using LM does improve the solution.
+
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the estimated and optimized 3D points respectively.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.12\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$} \\
+            \toprule
+            \toprule
+             & Estimated & Optimized \\
+            \midrule
+            Total & 3,420.75 & 3,250.65 \\
+            Median & 1.50 & 1.44\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce3-err}
+\end{table}
+
+Figure \ref{fig:ce3-3d} shows the estimated 3D points, the optimized 3D points and the camera pair. It can be observed that the optimized points align closely with the estimated points but it is difficult to draw conclusions from inspection alone that the set of optimized points would be a better solution. However, from Table \ref{tab:ce3-err} we know that this is the case.
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE3_3D_2.png}
+    \caption{Plot of the estimated 3D points, the optimized 3D points and the camera pair.}
+    \label{fig:ce3-3d}
+\end{figure}
+
+
+
+
+\subsection*{Computer Exercise 4}
+
+Tables \ref{tab:ce4-0-0}, \ref{tab:ce4-0-3}, \ref{tab:ce4-0.1-0} and \ref{tab:ce4-0.1-3} show reprojection errors where both the estimated 3D points and the 2D points are subjected to different Gaussian noise levels with zero mean. An obvious observation is that the set of optimized points has lower reprojection errors than the noisy points for all cases. What is particularly interesting is that when the noisy set of points give enormous reprojection errors the LM does a fantastic job in reducing the errors by many magnitudes. For example, when the points are subjected to noise of $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=3$ pixels, after optimization the total error is decreased by almost 19,000\% and the median by 54,000\%. It is also observable that the largest errors are given when the 3D points are subjected to noise. Another interesting observation is that Tables \ref{tab:ce4-0-3} and \ref{tab:ce4-0.1-0} show significant large difference in the errors before optimization but about the same error after optimization. It can be concluded that LM performs spectacularly good at reducing errors caused by Gaussian noise.
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=0$ pixels (same as in Computer Exercise 3).}
+        \begin{tabular}{p{0.08\textwidth}|p{0.11\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 3,420.75 & 3,250.65 \\
+            Median & 1.50 & 1.44\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0-0}
+\end{table}
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=3$ pixels.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.11\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 69,302.93 & 20,103.96 \\
+            Median & 31.31 & 4.85\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0-3}
+\end{table}
+
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=0$ pixels.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.16\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 713,674,263.63 & 20,103.95 \\
+            Median & 260,373.39 & 4.85\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0.1-0}
+\end{table}
+
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=3$ pixels.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.16\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 735,375,861.66 & 38,820.97 \\
+            Median & 256,616.18 & 9.24 \\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0.1-3}
+\end{table}
+
+Figures \ref{fig:ce4-3d-0-0}, \ref{fig:ce4-3d-0-3}, \ref{fig:ce4-3d-0.1-0} and \ref{fig:ce4-3d-0.1-3} show plots of all the combinations of noisy 3D points, as shown in the tables above, and the respective optimized 3D points. From inspection it is hardly possible to see the errors between the noisy and the optimized points since the noise levels are not significantly large enough to be able to see the errors visually. However, we do know from the tables above that the optimized 3D reconstructions are better in every case.
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0_0.png}
+    \caption{Plot of the noisy 3D points, the optimized 3D points and the camera pair for $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=0$ pixels (same as in Computer Exercise 3).}
+    \label{fig:ce4-3d-0-0}
+\end{figure}
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0_3.png}
+    \caption{Plot of the noisy 3D points, the optimized 3D points and the camera pair for $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=3$ pixels.}
+    \label{fig:ce4-3d-0-3}
+\end{figure}
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0.1_0.png}
+    \caption{Plot of the noisy 3D points, the optimized 3D points and the camera pair for $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=0$ pixels.}
+    \label{fig:ce4-3d-0.1-0}
+\end{figure}
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0.1_3.png}
+    \caption{3D plot of the noisy 3D points, the optimized 3D points and the camera pair for $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=3$ pixels.}
+    \label{fig:ce4-3d-0.1-3}
+\end{figure}
+
+
+
+\subsection*{Theoretical Exercise 4}
+By theory, $d$ is a descent direction for $F(v)$ if 
+$$
+\nabla_v F(v)d < 0
+$$
+
+Let $d=-M\nabla_v F(v)$ and $w=\nabla_v F(v)$, then
+
+$$
+\nabla_v F(v)^Td = -\nabla_v F(v)^TM\nabla_v F(v) = -w^TMv
+$$
+
+If $M \succ 0$ it follows that
+
+$$
+w^TMw>0 \Rightarrow -w^TMw<0 \text{ such that } ||w||\neq0
+$$
+
+Hence,
+
+$$
+\nabla_v F(v)d=-\nabla_v F(v)^TM\nabla_v F(v) < 0
+$$
+
+Thus, $d=-M\nabla_v F(v)$ is a descent direction for $F(v)$. \\
+
+
+In LM we have the update
+
+$$
+d=-(J(v)^TJ(v)+\mu I)^{-1}J(v)^T\textbf{r}(v)
+$$
+
+For nonlinear least squares 
+
+$$
+F(v)=||\textbf{r}(v)||^2=\textbf{r}(v)^T\textbf{r}(v)
+$$
+
+where the gradient is 
+
+$$
+\nabla_vF(v)=2\textbf{r}(v)^TJ(v)
+$$
+
+let $w=J(v)^T\textbf{r}(v)$ and $M=(J(v)^TJ(v)+\mu I)^{-1}$, then it follows that
+
+$$
+\begin{aligned}
+\nabla_v F(v)^Td&\sim-\textbf{r}(v)^TJ(v)(J(v)^TJ(v)+\mu I)^{-1}J(v)^T\textbf{r}(v)\\
+&= -w^TMw\\
+\end{aligned}
+$$
+
+$J(v)^TJ(v)$ is either semi-positive or positive definite. $\mu I \succ 0$  since $\mu>0$. Adding them together $J(v)^TJ(v)+\mu I \succ 0$. Since the inverse of a positive definite matrix is also a positive definite matrix, $M \succ 0$. We therefore have that
+
+$$
+w^TMw >0 \Rightarrow -w^TMw <0 \text{ such that } ||w||\neq0
+$$
+
+Hence, 
+
+$$
+\nabla_v F(v)d=\textbf{r}(v)^TJ(v)(J(v)^TJ(v)+\mu I)^{-1}J(v)^T\textbf{r}(v) < 0
+$$
+
+Thus, the update $d=-(J(v)^TJ(v)+\mu I)^{-1}J(v)^Tr(v)$ in LM is a descent direction for $F(v)=||r(v)||^2$.
+
+ 
+
+\end{document}
