@@ -254,7 +254,7 @@ Figures \ref{fig:ce1-img1-rt} and \ref{fig:ce1-img2-rt} show the two images, 20 
 
 \subsection*{Computer Exercise 2}
 
-Table \ref{tab:points} shows the number of points found in the first image, second image, the number of matches between the images, and the number of inliers after running the RANSAC algorithm for 100,000 iterations with a threshold error of 4 pixels.
+Table \ref{tab:points} shows the number of points found in the first image, second image, the number of matches between the images, and the number of inliers obtained by running the RANSAC algorithm for 100,000 iterations with a threshold error of 4 pixels.
 
 \begin{table}[H]
     \centering
@@ -263,10 +263,10 @@ Table \ref{tab:points} shows the number of points found in the first image, seco
             \toprule
              & No. points \\
             \midrule
-            fountain1 & 39561 \\
-            fountain2 & 38775 \\
-            Matches & 2604 \\
-            Inliers & 1840 \\
+            fountain1 & 39,561 \\
+            fountain2 & 38,775 \\
+            Matches & 2,604 \\
+            Inliers & 1,840 \\
             \bottomrule            
     \end{tabular}
     \label{tab:points}
@@ -285,7 +285,7 @@ Figures \ref{fig:ce2-p2-0}, \ref{fig:ce2-p2-1}, \ref{fig:ce2-p2-2}, and \ref{fig
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\linewidth]{CE2_3D_P2_1_2.1.png}
-    \caption{Cameras and 3D reconstruction corresponding to the second solution of the second camera. Camera 1 faces the object from the right and the camera 2 faces the object from the left as expected, and the 3D reconstruction is similar to the object in the images.}
+    \caption{Cameras and 3D reconstruction corresponding to the second solution of the second camera. Camera 1 faces the object from the right and camera 2 faces the object from the left as expected, and the 3D reconstruction is similar to the object in the images.}
     \label{fig:ce2-p2-1}
 \end{figure}
 
@@ -303,5 +303,326 @@ Figures \ref{fig:ce2-p2-0}, \ref{fig:ce2-p2-1}, \ref{fig:ce2-p2-2}, and \ref{fig
     \label{fig:ce2-p2-3}
 \end{figure}
 
+
+
+
+\section*{Levenberg-Marquardt for Structure from Motion Problems}
+\subsection*{Theoretical Exercise 3}
+\subsubsection*{a)}
+
+Given that
+
+$$
+r_i(X_j) = 
+\begin{pmatrix}
+x_{ij,1}-\frac{P_i^1\textbf{X}_j}{P_i^3\textbf{X}_j} \\
+\\
+x_{ij,2}-\frac{P_i^2\textbf{X}_j}{P_i^3\textbf{X}_j}
+\end{pmatrix}
+$$
+
+We compute the jacobian $J_i(\textbf{X}_j)$ of $r_i(\textbf{X}_j)$ by using the chain rule of derivatives as
+
+$$
+J_i(\textbf{X}_j) = 
+\begin{bmatrix}
+\frac{\partial r_{i,1}(\textbf{X}_j)}{\partial \textbf{X}_j} \\
+\\
+\frac{\partial r_{i,2}(\textbf{X}_j)}{\partial \textbf{X}_j} 
+\end{bmatrix}
+=
+\begin{bmatrix}
+-\left( P_i^1\textbf{X}_j \frac{\partial}{\partial \textbf{X}_j}(\frac{1}{P_i^3\textbf{X}_j}) + \frac{1}{P_i^3\textbf{X}_j}\frac{\partial}{\partial \textbf{X}_j}\left(P_i^1\textbf{X}_j\right)\right) \\
+\\
+-\left( P_i^2\textbf{X}_j \frac{\partial}{\partial \textbf{X}_j}(\frac{1}{P_i^3\textbf{X}_j}) + \frac{1}{P_i^3\textbf{X}_j}\frac{\partial}{\partial \textbf{X}_j}\left(P_i^2\textbf{X}_j\right)\right) \\
+\end{bmatrix}=
+$$
+
+$$
+\begin{bmatrix}
+-\left( -\frac{P_i^1\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 + \frac{1}{P_i^3\textbf{X}_j}P_i^1\right) \\
+\\
+-\left( -\frac{P_i^2\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 + \frac{1}{P_i^3\textbf{X}_j}P_i^2\right) \\
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{P_i^1\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 - \frac{1}{P_i^3\textbf{X}_j}P_i^1 \\
+\\
+\frac{P_i^2\textbf{X}_j}{(P_i^3\textbf{X}_j)^2}P_i^3 - \frac{1}{P_i^3\textbf{X}_j}P_i^2
+\end{bmatrix}
+$$
+
+where $P_i^k\textbf{X}_j$ for $k=1,2,3$ are scalars, and $P_i^k$ for $k=1,2,3$ are row vectors of four columns. Hence, $J_i(\textbf{X}_j) \in \mathbb{R}^{2\times 4}$.
+
+
+\subsubsection*{b)}
+
+We know that $r_i(\textbf{X}_j) \in \mathbb{R}^{2\times 1}$ and $J(\textbf{X}_j) \in \mathbb{R}^{2\times 4}$. Expanding the following yields
+
+$$
+\sum_{i=1}^m ||r_i(\textbf{X}_j)+ J_i(\textbf{X}_j)\delta \textbf{X}_j||^2 =
+$$
+
+$$
+\sum_{i=1}^m (r_i^T(\textbf{X}_j) r_i(\textbf{X}_j) + 2r_i^T(\textbf{X}_j)J_i(\textbf{X}_j)\delta \textbf{X}_j + \delta \textbf{X}_j^TJ_i^T(\textbf{X}_j)J_i(\textbf{X}_j)\delta \textbf{X}_j) =
+$$
+
+$$
+\begin{bmatrix}
+r_1(\textbf{X}_j) \\
+\vdots \\
+r_m(\textbf{X}_j)
+\end{bmatrix}^T
+\begin{bmatrix}
+r_1(\textbf{X}_j) \\
+\vdots \\
+r_m(\textbf{X}_j)
+\end{bmatrix}
++2
+\begin{bmatrix}
+r_1(\textbf{X}_j) \\
+\vdots \\
+r_m(\textbf{X}_j)
+\end{bmatrix}^T
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix}
+\delta \textbf{X}_j+\delta \textbf{X}_j^T
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix}^T
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix}
+\delta \textbf{X}_j=
+$$
+
+$$
+r^T(\textbf{X}_j) r(\textbf{X}_j) + 2r^T(\textbf{X}_j)J(\textbf{X}_j)\delta \textbf{X}_j + \delta \textbf{X}_j^TJ^T(\textbf{X}_j)J(\textbf{X}_j)\delta \textbf{X}_j =
+$$
+
+$$
+||r(\textbf{X}_j) + J(\textbf{X}_j)\delta \textbf{X}_j||^2
+$$
+
+where 
+
+$$
+r(\textbf{X}_j) =
+\begin{bmatrix}
+r_1(\textbf{X}_j) \\
+\vdots \\
+r_m(\textbf{X}_j)
+\end{bmatrix} \in \mathbb{R}^{2m\times 1}
+\text{, and }
+J(\textbf{X}_j)=
+\begin{bmatrix}
+J_1(\textbf{X}_j) \\
+\vdots \\
+J_m(\textbf{X}_j)
+\end{bmatrix} \in \mathbb{R}^{2m\times 4}
+$$\\
+
+
+
+
+\subsection*{Computer Exercise 3}
+
+Table \ref{tab:ce3-err} shows the total and median reprojection errors of the estimated 3D reconstruction $\textbf{X}$ from triangulation, and the same 3D reconstruction but optimized using Levenberg-Marquardt (LM). We can see that the optimized set of 3D points has lower total and median reprojection error, showing that using LM optimization improves the solution.
+
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the estimated and optimized 3D points.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.12\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$} \\
+            \toprule
+            \toprule
+             & Estimated & Optimized \\
+            \midrule
+            Total & 3,420.75 & 3,250.65 \\
+            Median & 1.50 & 1.44\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce3-err}
+\end{table}
+
+Figure \ref{fig:ce3-3d} shows the estimated 3D points, the optimized 3D points and the camera pair. It can be observed that the optimized points align closely with the estimated points but it is difficult to draw conclusions from inspection alone that the set of optimized points would be a better solution. However, from Table \ref{tab:ce3-err} we know that this is the case.
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE3_3D_2.png}
+    \caption{3D plot of the estimated 3D points, the optimized 3D points and the camera pair.}
+    \label{fig:ce3-3d}
+\end{figure}
+
+
+
+
+\subsection*{Computer Exercise 4}
+
+Tables \ref{tab:ce4-0-0}, \ref{tab:ce4-0-3}, \ref{tab:ce4-0.1-0} and \ref{tab:ce4-0.1-3} show the reprojection errors of the points subjected to different Gaussian noise levels and the corresponding optimized 3D points. An obvious observation is that the set of optimized points has lower reprojection errors than the noisy points for all cases. What is particularly interesting is that when the noisy set of points give enormous reprojection errors the LM does a fantastic job in reducing the errors by many magnitudes. For example, when the points are subjected to noise of $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=3$ pixels, after optimization the total error is decreased by almost 19,000\% and the median by 54,000\%. It is also observable that the largest errors are given when the 3D points are subjected to noise. Another interesting observation is that Tables \ref{tab:ce4-0-3} and \ref{tab:ce4-0.1-0} show significant large difference in the errors before optimization but about the same error after optimization.
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with mean 0, $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=0$ pixels.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.11\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 3,420.75 & 3,250.65 \\
+            Median & 1.50 & 1.44\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0-0}
+\end{table}
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with mean 0, $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=3$ pixels.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.11\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 69,302.93 & 20,103.96 \\
+            Median & 31.31 & 4.85\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0-3}
+\end{table}
+
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with mean 0, $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=0$ pixels.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.16\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 713,674,263.63 & 20,103.95 \\
+            Median & 260,373.39 & 4.85\\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0.1-0}
+\end{table}
+
+
+\begin{table}[H]
+    \centering
+        \caption{The total and median reprojection errors of the noisy and optimized 3D points, with the noisy points subjected to Gaussian noise with mean 0, $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=3$ pixels.}
+        \begin{tabular}{p{0.08\textwidth}|p{0.16\textwidth}|p{0.12\textwidth}}
+            % \toprule
+            \multicolumn{3}{c}{Reprojection error of $\textbf{X}$.}\\
+            \toprule
+            \toprule
+             & Noisy & Optimized \\
+            \midrule
+            Total & 735,375,861.66 & 38,820.97 \\
+            Median & 256,616.18 & 9.24 \\
+            \bottomrule            
+        \end{tabular}
+    \label{tab:ce4-0.1-3}
+\end{table}
+
+Figures \ref{tab:ce4-0-0}, \ref{tab:ce4-0-3}, \ref{tab:ce4-0.1-0} and \ref{tab:ce4-0.1-3} show plots of all the combinations of noisy 3D points, as shown in the tables above, and the respective optimized points. From inspection it is hardly possible to see any difference between them since the noise levels are not significant large enough for the human eye to be able to differentiate. However, we do know from the tables above that the optimized 3D reconstructions are better in every case.
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0_0.png}
+    \caption{3D plot of the noisy 3D points, the optimized 3D points and the camera pair, for $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=0$ pixels.}
+    \label{fig:ce4-3d-0-0}
+\end{figure}
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0_3.png}
+    \caption{3D plot of the noisy 3D points, the optimized 3D points and the camera pair, for $\sigma_{\textbf{X}}=0$ m and $\sigma_{x}=3$ pixels.}
+    \label{fig:ce3-3d-0-3}
+\end{figure}
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0.1_0.png}
+    \caption{3D plot of the noisy 3D points, the optimized 3D points and the camera pair, for $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=0$ pixels.}
+    \label{fig:ce3-3d-0.1-0}
+\end{figure}
+
+\begin{figure}[H]
+    \centering    \includegraphics[width=0.9\linewidth]{CE4_3D_2_std_0.1_3.png}
+    \caption{3D plot of the noisy 3D points, the optimized 3D points and the camera pair, for $\sigma_{\textbf{X}}=0.1$ m and $\sigma_{x}=3$ pixels.}
+    \label{fig:ce3-3d-0.1-3}
+\end{figure}
+
+
+
+\subsection*{Theoretical Exercise 4}
+By theory, $d$ is a descent direction for $F(v)$ if 
+$$
+\nabla_v F(v)d < 0
+$$
+
+Let $d=-M\nabla_v F(v)$ and $\nabla_v F(v)=w$, then
+
+$$
+\nabla_v F(v)^Td = -\nabla_v F(v)^TM\nabla_v F(v) = -w^TMv
+$$
+
+If $M$ is positive definite it follows that
+
+$$
+w^TMw>0 \Rightarrow -w^TMw<0 \text{ such that } ||w||\neq0
+$$
+
+Hence, $d=-M\nabla_v F(v)$ is a descent direction for $F(v)$. \\
+
+
+In LM we have the update
+
+$$
+d=-(J(v)^TJ(v)+\mu I)^{-1}J(v)^Tr(v)
+$$
+
+For nonlinear least squares 
+
+$$
+F(v)=||r(v)||^2=r(v)^Tr(v)
+$$
+
+where the gradient is 
+
+$$
+\nabla_vF(v)=2r(v)^TJ(v)
+$$
+
+we let $w=J(v)^Tr(v)$ and $M=(J(v)^TJ(v)+\mu I)^{-1}$, then it follows that
+
+$$
+\begin{aligned}
+\nabla_v F(v)^Td&\sim-r(v)^TJ(v)(J(v)^TJ(v)+\mu I)^{-1}J(v)^Tr(v)\\
+&= -w^TMw\\
+\end{aligned}
+$$
+
+$J(v)^TJ(v)$ is at least semi-positive definite. $\mu I$ is positive definite since $\mu>0$. Adding them together $J(v)^TJ(v)+\mu I$ becomes an invertible semi-positive definite matrix at least. The inverse of an invertible semi-positive definite matrix is also a semi-positive definite matrix. Therefore, $M$ is at least a semi-positive definite matrix where
+
+$$
+w^TMw \geq0 \Rightarrow -w^TMw\leq0 \text{ such that } ||w||\neq0
+$$
+
+Hence, the update $d=-(J(v)^TJ(v)+\mu I)^{-1}J(v)^Tr(v)$ in LM is a descent direction for $F(v)=||r(v)||^2$.
+
+ 
 
 \end{document}

@@ -596,6 +596,105 @@ def compute_average_error(x_proj, x_img):
     avg_err = np.sum(err) / np.size(err,0)
     return avg_err
 
+def compute_reprojection_error(P1, P2, Xj, x1j, x2j):
+
+    x1j_proj = transform_and_dehomogenize(P1, Xj)
+    x2j_proj = transform_and_dehomogenize(P2, Xj)
+    
+    r1 = np.array([x1j[0] - x1j_proj[0], x1j[1] - x1j_proj[1]])
+    r2 = np.array([x2j[0] - x2j_proj[0], x2j[1] - x2j_proj[1]])
+    res = np.concatenate((r1, r2), 0)
+    reproj_err = LA.norm(res)**2
+
+    return reproj_err, res
+
+def compute_total_reprojection_error(P1, P2, X_est, x1, x2):
+
+    n_pts = np.size(X_est,1)
+    reproj_err_tot = []
+    res_tot = []
+
+    for j in range(n_pts):
+
+        Xj = X_est[:,j]
+        x1j = x1[:,j]
+        x2j = x2[:,j]
+
+        reproj_err, res = compute_reprojection_error(P1, P2, Xj, x1j, x2j)
+        reproj_err_tot.append(reproj_err)
+        res_tot.append(res)
+    
+    res_tot = np.concatenate(res_tot, 0)
+
+    print('\nTotal reprojection error:', round(np.sum(reproj_err_tot), 2))
+    print('Median reprojection error:', round(np.median(reproj_err_tot), 2))
+    print('Avg. reprojection error:', round(np.mean(reproj_err_tot), 2))
+
+    return reproj_err_tot, res_tot
+
+def compute_jacobian_of_r(Pi, Xj):
+    J1 = (Pi[-1,:] * (Pi[0,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (Pi[0,:] / (Pi[-1,:] @ Xj))
+    J2 = (Pi[-1,:] * (Pi[1,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (Pi[1,:] / (Pi[-1,:] @ Xj))
+    J = np.row_stack((J1, J2))
+    return J
+
+def linearize_reprojection_error(P1, P2, Xj, x1j, x2j):
+
+    _, r = compute_reprojection_error(P1, P2, Xj, x1j, x2j)
+
+    J1 = compute_jacobian_of_r(P1, Xj)
+    J2 = compute_jacobian_of_r(P2, Xj)
+    J = np.row_stack((J1, J2))
+    
+    return r, J
+
+def compute_update(r, J, mu):
+    I = np.eye(np.size(J,1))
+    delta_Xj = -LA.inv(J.T @ J + mu*I) @ J.T @ r
+    return delta_Xj
+
+def optimize_X(P1, P2, X, x1, x2, mu_init, n_its):
+
+    n_pts = np.size(X,1)
+    ts = []
+
+    for j in trange(n_pts):
+        
+        Xj = X[:,j]
+        x1j = x1[:,j]
+        x2j = x2[:,j]
+
+        t = 0
+        converged = False
+        mu = mu_init
+    
+        while (t <= n_its) and converged is not True:
+        
+            t += 1
+            r, J = linearize_reprojection_error(P1, P2, Xj, x1j, x2j)
+            delta_Xj = compute_update(r, J, mu)
+            Xj_opt = dehomogenize(Xj + delta_Xj)
+            
+            reproj_err, _ = compute_reprojection_error(P1, P2, Xj, x1j, x2j)
+            reproj_err_opt, _ = compute_reprojection_error(P1, P2, Xj_opt, x1j, x2j)
+
+            if np.isclose(reproj_err_opt, reproj_err):
+                converged = True
+            elif reproj_err_opt < reproj_err:
+                Xj = Xj_opt
+                mu /= 10
+            else:
+                mu *= 10
+        
+        X[:,j] = Xj
+        ts.append(t)
+
+    print('\nAvg its:', np.mean(ts))
+    print('Max its:', np.max(ts))
+    print('Min its:', np.min(ts))
+
+    return X
+
 def remove_error_2P_points(x_proj, x_img, err):
 
     x_keep = (((x_proj[0,:] - x_img[0,:])**2 + (x_proj[1,:] - x_img[1,:])**2)**0.5 < err)
