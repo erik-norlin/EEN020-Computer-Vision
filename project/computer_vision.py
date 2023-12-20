@@ -469,12 +469,12 @@ def RQ_decompose(a):
 def compute_sift_points(img1, img2, marg):
     img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     # img1 = cv2.medianBlur(img1, ksize = 5)
-    img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
+    # img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
     # img1 = img1.astype(np.float32)
 
     img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     # img2 = cv2.medianBlur(img2, ksize = 5)
-    img2 = cv2.normalize(img2, None, 0, 255, cv2.NORM_MINMAX)
+    # img2 = cv2.normalize(img2, None, 0, 255, cv2.NORM_MINMAX)
     # img2 = img2.astype(np.float32)
 
 
@@ -511,7 +511,54 @@ def compute_sift_points(img1, img2, marg):
 
     print('Number of good matches:', np.size(x1,1))
 
-    return x1, x2, img_match
+    return x1, x2, kp1, kp2, des1, des2, img_match
+
+def compute_sift_points_sequential(kp1, des1, img2, marg):
+    # img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    # img1 = cv2.medianBlur(img1, ksize = 5)
+    # img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
+    # img1 = img1.astype(np.float32)
+
+    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    # img2 = cv2.medianBlur(img2, ksize = 5)
+    # img2 = cv2.normalize(img2, None, 0, 255, cv2.NORM_MINMAX)
+    # img2 = img2.astype(np.float32)
+
+
+    # sift = cv2.SIFT_create(int nfeatures=0, int nOctaveLayers=3, double contrastThreshold=0.04, double edgeThreshold=10, double sigma=1.6)
+    sift = cv2.SIFT_create()
+    # kp1, des1 = sift.detectAndCompute(img1, None)
+    kp2, des2 = sift.detectAndCompute(img2, None)
+
+    FLANN_INDEX_KDTREE = 1
+    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+    search_params = dict(checks=50)   # or pass empty dictionary
+
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+    matches = flann.knnMatch(des1, des2, k=2)
+
+    # bf = cv2.BFMatcher()
+    # matches = bf.knnMatch(des1, des2, k=2)
+
+    print('Number of matches:', np.size(matches,0))
+
+    good_matches = []
+    for m, n in matches:
+        if m.distance < marg*n.distance:
+            good_matches.append([m])
+
+    # draw_params = dict(matchColor=(255,0,255), singlePointColor=(0,255,0), matchesMask=None, flags=cv2.DrawMatchesFlags_DEFAULT)
+    # img_match = cv2.drawMatchesKnn(img1, kp1, img2, kp2, good_matches, None, **draw_params)
+
+    x1 = np.stack([kp1[match[0].queryIdx].pt for match in good_matches],1)
+    x2 = np.stack([kp2[match[0].trainIdx].pt for match in good_matches],1)
+
+    x1 = homogenize(x1, multi=True)
+    x2 = homogenize(x2, multi=True)
+
+    print('Number of good matches:', np.size(x1,1))
+
+    return x1, x2
 
 def get_sift_plot_points(img1_pts, img2_pts, img1):
     x = [img1_pts[0,:], np.size(img1,1)+img2_pts[0,:]]
@@ -562,15 +609,20 @@ def extract_valid_camera_and_points(P1, P_arr, X_arr):
     valid_coords_ind = np.argmax(valid_coords)
     X_valid = X_arr[valid_coords_ind]
     P2_valid = P_arr[valid_coords_ind]
+    P2_valid = P2_valid / P2_valid[-1,-1]
     
     print('No. valid coords for each camera pair:', valid_coords)
     print('Argmax(P2_arr):', valid_coords_ind)
-
+    
     return P2_valid, X_valid
 
 def get_canonical_camera():
     P = np.concatenate((np.eye(3), np.zeros(3)[:,np.newaxis]), 1)
     return P
+
+def get_camera_rotation(P):
+    R = P[:,:3]
+    return R
 
 def extract_P_from_E(E):
 
