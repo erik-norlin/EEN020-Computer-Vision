@@ -58,12 +58,12 @@ def compute_normalized_principal_axis(P):
     v = LA.det(M) * m3
     return normalize_vector(v)
 
-def compute_camera_center_and_normalized_principal_axis(P):
-    C = compute_camera_center(P)
-    p_axis = compute_normalized_principal_axis(P) 
-    return C, p_axis
+# def compute_camera_center_and_normalized_principal_axis(P):
+#     C = compute_camera_center(P)
+#     p_axis = compute_normalized_principal_axis(P) 
+#     return C, p_axis
 
-def compute_camera_and_normalized_principal_axis(P, multi=False):
+def compute_camera_center_and_normalized_principal_axis(P, multi=False):
 
     if multi:
         C_arr = np.array([homogenize(compute_camera_center(P[i])) for i in range(np.size(P,0))])
@@ -255,7 +255,7 @@ def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, print_svd=False):
             print('S:', S)
 
     X = dehomogenize(np.stack(X,1))
-    return X
+    return X # in P3
 
 def get_triangulated_X_from_extracted_P2_solutions(P1, P2_arr, x1_norm, x2_norm):
     X_arr = np.array([triangulate_3D_point_DLT(P1, P2, x1_norm, x2_norm, print_svd=False) for P2 in P2_arr])
@@ -621,8 +621,12 @@ def get_canonical_camera():
     return P
 
 def get_camera_rotation(P):
-    R = P[:,:3]
+    R = P[:,:-1]
     return R
+
+def get_camera_translation(P):
+    T = P[:,-1]
+    return T
 
 def extract_P_from_E(E):
 
