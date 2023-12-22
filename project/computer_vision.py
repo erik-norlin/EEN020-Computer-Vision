@@ -150,46 +150,6 @@ def normalize_x_and_y(img_pts):
 def check_mean_and_std(x):
     print('\nx_mean:', np.mean(x[0,:]), '\nx_std:', np.std(x[0,:]), '\ny_mean:', np.mean(x[1,:]), '\ny_std:', np.std(x[1,:]))
 
-# def DLT_P3(X_model, x_model):
-
-#     n = np.size(x_model,1)
-#     M = []
-
-#     for i in range(n):
-
-#         X = X_model[0,i]
-#         Y = X_model[1,i]
-#         Z = X_model[2,i]
-
-#         x = x_model[0,i]
-#         y = x_model[1,i]
-
-#         m = np.array([[X, Y, Z, 1, 0, 0, 0, 0, -x*X, -x*Y, -x*Z, -x],
-#                       [0, 0, 0, 0, X, Y, Z, 1, -y*X, -y*Y, -y*Z, -y]])
-
-#         M.append(m)
-
-#     M = np.concatenate(M, 0)
-#     U, S, VT = LA.svd(M, full_matrices=False)
-#     M_approx = U @ np.diag(S) @ VT
-
-#     v = VT[-1,:] # last row of VT because optimal v should be last column of V
-#     Mv = M @ v
-
-#     print('||Mv||:', (Mv @ Mv)**0.5)
-#     print('||v||^2:', v @ v)
-#     print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
-#     # print('S:', S)
-    
-#     return VT
-
-# def estimate_camera_DLT_v2(X_model, x_model):
-
-#     VT = DLT_P3(X_model, x_model)
-#     P = np.stack([VT[-1, i:i+4] for i in range(0, 12, 4)], 0)
-
-#     return P
-
 def estimate_camera_DLT(Xmodel, img_pts, print_svd=False):
 
     n = np.size(img_pts,1)
@@ -257,7 +217,7 @@ def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, print_svd=False):
     X = dehomogenize(np.stack(X,1))
     return X # in P3
 
-def get_triangulated_X_from_extracted_P2_solutions(P1, P2_arr, x1_norm, x2_norm):
+def compute_triangulated_X_from_extracted_P2_solutions(P1, P2_arr, x1_norm, x2_norm):
     X_arr = np.array([triangulate_3D_point_DLT(P1, P2, x1_norm, x2_norm, print_svd=False) for P2 in P2_arr])
     return X_arr
 
@@ -383,8 +343,12 @@ def estimate_E_robust(K, x1_norm, x2_norm, n_its, n_samples, err_threshold_px):
         
     return best_E, best_inliers
 
-def compute_ransac_iterations(alpha, epsilon, s):
-    T = np.ceil(np.log(1-alpha) / np.log(1-epsilon**s))
+def compute_ransac_iterations(alpha, epsilon, s, min_its, max_its, scale):
+    T = scale * np.ceil(np.log(1-alpha) / np.log(1-epsilon**s))
+    if np.isinf(T) or T > max_its:
+        T = max_its
+    elif T < min_its:
+        T = min_its
     return T
 
 def normalize_camera(P):
@@ -593,9 +557,19 @@ def point_line_distance_2D(l, p):
     d = np.abs(a*x + b*y + c) / (a**2 + b**2)**0.5
     return d
 
-def get_skew_vector(T):
+def get_skew_symmetric_vector(T):
     t = np.array([T[2,1], T[0,2], T[1,0]])
     return t
+
+def get_skew_symmetric_matrix(t):
+    T = np.array([[0, -t[2], t[1]],
+                  [t[2], 0, -t[0]],
+                  [-t[1], t[0], 0]])
+    return T
+
+def compute_E_from_R_and_T(R, T):
+    E = get_skew_symmetric_matrix(T) @ R
+    return E
 
 def extract_valid_camera_and_points(P1, P_arr, X_arr):
         
@@ -630,9 +604,7 @@ def get_camera_translation(P):
 
 def extract_P_from_E(E):
 
-    U, S, VT = LA.svd(E, full_matrices=False)
-    # print(U @ np.diag([1,1,0] @ VT))
-    print(S)
+    U, _, VT = LA.svd(E, full_matrices=False)
 
     if LA.det(U @ VT) < 0:
         VT = -VT
@@ -646,8 +618,8 @@ def extract_P_from_E(E):
     R1 = U @ W @ VT
     R2 = U @ W.T @ VT
 
-    t1 = get_skew_vector(S1)
-    t2 = get_skew_vector(S2)
+    t1 = get_skew_symmetric_vector(S1)
+    t2 = get_skew_symmetric_vector(S2)
 
     P1 = np.concatenate((R1, t1[:, np.newaxis]), 1)
     P2 = np.concatenate((R1, t2[:, np.newaxis]), 1)
