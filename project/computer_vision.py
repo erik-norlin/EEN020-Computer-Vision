@@ -142,6 +142,66 @@ def normalize_x_and_y(img_pts, verbose=False):
 def check_mean_and_std(x):
     print('\nx_mean:', np.mean(x[0,:]), '\nx_std:', np.std(x[0,:]), '\ny_mean:', np.mean(x[1,:]), '\ny_std:', np.std(x[1,:]))
 
+
+def unitize(a, b):
+    denom = 1.0 / np.sqrt(a**2 + b**2)
+    ra = a * denom
+    rb = b * denom
+    return ra, rb
+
+def homography_to_RT(H, x1, x2):
+    # Check the right sign for H
+    if LA.det(H) < 0:
+        H *= -1 
+        
+    N = x1.shape[1]
+    if x1.shape[0] != 3:
+        x1 = np.vstack([x1, np.ones((1, N))])
+    if x2.shape[0] != 3:
+        x2 = np.vstack([x2, np.ones((1, N))])
+
+    positives = np.sum(np.sum(x2 * (H @ x1), axis=0) > 0)
+    if positives < (N / 2):
+        H *= -1
+
+    U, S, VT = np.linalg.svd(H, full_matrices=False)
+    V = VT.T
+    s1 = S[0] / S[1]
+    s3 = S[2] / S[1]
+    zeta = s1 - s3
+    a1 = np.sqrt(1 - s3**2)
+    b1 = np.sqrt(s1**2 - 1)
+    a, b = unitize(a1, b1)
+    c, d = unitize(1+s1*s3, a1*b1)
+    e, f = unitize(-b/s1, -a/s3)
+    v1, v3 = V[:, 0], V[:, 2]
+    n1 = b * v1 - a * v3
+    n2 = b * v1 + a * v3
+    R1 = U @ np.array([[c, 0, d], [0, 1, 0], [-d, 0, c]]) @ VT
+    R2 = U @ np.array([[c, 0, -d], [0, 1, 0], [d, 0, c]]) @ VT
+    t1 = e * v1 + f * v3
+    t2 = e * v1 - f * v3
+    if n1[2] < 0:
+        t1 = -t1
+        n1 = -n1
+    if n2[2] < 0:
+        t2 = -t2
+        n2 = -n2
+
+    # Move from Triggs' convention H = R*(I - t*n') to H&Z notation H = R - t*n'
+    t1 = R1 @ t1
+    t2 = R2 @ t2
+
+    # Verify that we obtain the initial homography back
+    # H /= S[1]
+    # print(np.linalg.norm(R1 - zeta * np.outer(t1, n1) - H), np.linalg.norm(R2 - zeta * np.outer(t2, n2) - H))
+
+    return R1, t1, R2, t2
+
+    # Example usage:
+    # H is the homography matrix, x1 and x2 are the corresponding 2D points
+    # R1, t1, R2, t2 = homography_to_RT(H, x1, x2)
+
 def estimate_camera_DLT(Xmodel, img_pts, verbose=False):
 
     n = np.size(img_pts,1)
@@ -175,6 +235,95 @@ def estimate_camera_DLT(Xmodel, img_pts, verbose=False):
         print('S:', S)
 
     return P
+
+def estimate_T_DLT_1(img_pts, verbose=False):
+
+    n = img_pts.shape[1]
+    M = []
+
+    for i in range(n):
+
+        x = img_pts[0,i]
+        y = img_pts[1,i]
+
+        m = np.array([[1, 0, -x],
+                      [0, 1, -y]])
+        
+        M.append(m)
+
+    M = np.concatenate(M, 0)
+    U, S, VT = LA.svd(M, full_matrices=False)
+    T = VT[-1,:]
+
+    if verbose:
+        M_approx = U @ np.diag(S) @ VT
+        v = VT[-1,:]
+        Mv = M @ v
+        print('\n||Mv||:', (Mv @ Mv)**0.5)
+        print('||v||^2:', v @ v)
+        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+        print('S:', S)
+
+    return T
+
+def estimate_T_DLT_2(R, img_pts, verbose=False):
+
+    n = img_pts.shape[1]
+    M = []
+
+    for i in range(n):
+
+        xx = create_skew_symmetric_matrix(img_pts[:,i])
+        m = np.column_stack((xx, xx @ R))
+        M.append(m)
+
+    M = np.concatenate(M, 0)
+    U, S, VT = LA.svd(M, full_matrices=False)
+    T = VT[-1,:3]
+
+    if verbose:
+        M_approx = U @ np.diag(S) @ VT
+        v = VT[-1,:]
+        Mv = M @ v
+        print('\n||Mv||:', (Mv @ Mv)**0.5)
+        print('||v||^2:', v @ v)
+        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+        print('S:', S)
+
+    return T
+
+def estimate_H_DLT(img1_pts, img2_pts, verbose=False):
+
+    n = np.size(img1_pts,1)
+    M = []
+
+    for i in range(n):
+
+        x = img1_pts[0,i]
+        y = img1_pts[1,i]
+
+        u = img2_pts[0,i]
+        v = img2_pts[1,i]
+
+        m = np.array([[x, y, 1, 0, 0, 0, -u*x, -u*y, -u],
+                      [0, 0, 0, x, y, 1, -v*x, -v*y, -v]])
+
+        M.append(m)
+
+    M = np.concatenate(M, 0)
+    U, S, VT = LA.svd(M, full_matrices=False)
+    H = np.stack([VT[-1, i:i+3] for i in range(0, 9, 3)], 0)
+
+    if verbose:
+        M_approx = U @ np.diag(S) @ VT
+        v = VT[-1,:] # last row of VT because optimal v should be last column of V
+        Mv = M @ v
+        print('\n||Mv||:', (Mv @ Mv)**0.5)
+        print('||v||^2:', v @ v)
+        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+        print('S:', S)
+
+    return H
 
 def triangulate_3D_point_DLT(P1, P2, img1_pts, img2_pts, verbose=False):
     
@@ -333,6 +482,7 @@ def estimate_E_robust(K, x1_norm, x2_norm, n_its, n_samples, err_threshold_px):
         
     return best_E, best_inliers
 
+
 def compute_ransac_iterations(alpha, epsilon, s, min_its, max_its, scale):
     T = scale * np.ceil(np.log(1-alpha) / np.log(1-epsilon**s))
     if np.isinf(T) or T > max_its:
@@ -371,6 +521,10 @@ def compute_and_plot_lines(l, img, ax):
 def compute_RMS_error(distance1_arr, distance2_arr):
     e_rms = np.sqrt(np.sum(distance1_arr**2 + distance2_arr**2) / (2*np.size(D1, 0)))
     return e_rms
+
+def compute_point_point_distance(x_proj, x_img):
+    distance_arr = LA.norm(x_proj - x_img, axis=0)
+    return distance_arr
 
 def compute_point_line_distance_2D(l, p, multi=False):
 
@@ -667,7 +821,7 @@ def compute_update(r, J, mu):
     delta_Xj = -LA.inv(J.T @ J + mu*I) @ J.T @ r
     return delta_Xj
 
-def optimize_X(P1, P2, X, x1, x2, mu_init, n_its):
+def optimize_X(P1, P2, X, x1, x2, mu_init, n_its, verbose=False):
 
     n_pts = np.size(X,1)
     ts = []
@@ -703,9 +857,10 @@ def optimize_X(P1, P2, X, x1, x2, mu_init, n_its):
         X[:,j] = Xj
         ts.append(t)
 
-    print('\nAvg its:', np.mean(ts))
-    print('Max its:', np.max(ts))
-    print('Min its:', np.min(ts))
+    if verbose:
+        print('\nAvg its:', np.mean(ts))
+        print('Max its:', np.max(ts))
+        print('Min its:', np.min(ts))
 
     return X
 
