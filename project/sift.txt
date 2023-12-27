@@ -1,0 +1,142 @@
+
+
+
+### Computing and saving SIFT-points ###
+
+## For rotation averaging ##
+
+Camera pair: 1 / 8
+opencv: (13403, 128) (14688, 128)
+vlfeat. (10348, 128) (10363, 128)
+Number of matches: 10348
+Number of good matches: 6374
+
+Camera pair: 2 / 8
+opencv: (14688, 128) (14163, 128)
+vlfeat. (10363, 128) (10274, 128)
+Number of matches: 10363
+Number of good matches: 6773
+
+Camera pair: 3 / 8
+opencv: (14163, 128) (13615, 128)
+vlfeat. (10274, 128) (10227, 128)
+Number of matches: 10274
+Number of good matches: 6617
+
+Camera pair: 4 / 8
+opencv: (13615, 128) (14238, 128)
+vlfeat. (10227, 128) (10248, 128)
+Number of matches: 10227
+Number of good matches: 6600
+
+Camera pair: 5 / 8
+opencv: (14238, 128) (14619, 128)
+vlfeat. (10248, 128) (10242, 128)
+Number of matches: 10248
+Number of good matches: 6779
+
+Camera pair: 6 / 8
+opencv: (14619, 128) (14937, 128)
+vlfeat. (10242, 128) (10305, 128)
+Number of matches: 10242
+Number of good matches: 6457
+
+Camera pair: 7 / 8
+opencv: (14937, 128) (15169, 128)
+vlfeat. (10305, 128) (10263, 128)
+Number of matches: 10305
+Number of good matches: 6400
+
+Camera pair: 8 / 8
+opencv: (15169, 128) (14769, 128)
+vlfeat. (10263, 128) (10168, 128)
+Number of matches: 10263
+Number of good matches: 5899
+
+
+## For translation registration ##
+
+Image: 9 / 9 (initial image pair)
+opencv: (13403, 128) (14769, 128)
+vlfeat. (10348, 128) (10168, 128)
+Number of matches: 10348
+Number of good matches: 1245
+
+Image: 2 / 9
+opencv: (14688, 128)
+vlfeat. (10363, 128)
+Number of matches: 1245
+Number of good matches: 1087
+
+Image: 3 / 9
+opencv: (14163, 128)
+vlfeat. (10274, 128)
+Number of matches: 1245
+Number of good matches: 1096
+
+Image: 4 / 9
+opencv: (13615, 128)
+vlfeat. (10227, 128)
+Number of matches: 1245
+Number of good matches: 1082
+
+Image: 5 / 9
+opencv: (14238, 128)
+vlfeat. (10248, 128)
+Number of matches: 1245
+Number of good matches: 1097
+
+Image: 6 / 9
+opencv: (14619, 128)
+vlfeat. (10242, 128)
+Number of matches: 1245
+Number of good matches: 1078
+
+Image: 7 / 9
+opencv: (14937, 128)
+vlfeat. (10305, 128)
+Number of matches: 1245
+Number of good matches: 1067
+
+Image: 8 / 9
+opencv: (15169, 128)
+vlfeat. (10263, 128)
+Number of matches: 1245
+Number of good matches: 1021
+
+
+
+
+
+No. valid coords for each camera pair: [7394    0 3697 3697]
+No. valid coords for each camera pair: [4528 4528    0 9056]
+No. valid coords for each camera pair: [3596 3596    0 7192]
+No. valid coords for each camera pair: [    0 11204  5602  5602]
+No. valid coords for each camera pair: [    0 11740  5870  5870]
+No. valid coords for each camera pair: [    0 10744  5372  5372]
+No. valid coords for each camera pair: [ 5222  5222     0 10444]
+No. valid coords for each camera pair: [ 5202  5202 10404     0]
+
+
+
+
+
+0 det R 1.0
+1 det R 1.0132927086288164
+2 det R 1.0184514408562035
+3 det R 1.0260132841762715
+4 det R 1.0309269123167106
+5 det R 1.0383246441249356
+6 det R 1.042327575164438
+7 det R 1.057908657615739
+8 det R 1.0594359869493306
+
+0 det R 1.0
+1 det R 1.013488476461127
+2 det R 1.0210480700029054
+3 det R 1.0250733836947385
+4 det R 1.0296648984513794
+5 det R 1.0356269986963773
+6 det R 1.03965120870149
+7 det R 1.055242670890614
+8 det R 1.0571601117170082

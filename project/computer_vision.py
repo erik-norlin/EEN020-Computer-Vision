@@ -8,7 +8,6 @@ import matplotlib as mpl
 from matplotlib.pyplot import cm
 import cv2
 from tqdm import trange
-from icecream import ic
 
 
 def load_image(path, multi=False):
