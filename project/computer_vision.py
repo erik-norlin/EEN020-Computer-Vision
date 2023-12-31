@@ -710,7 +710,7 @@ def extract_valid_camera_and_points(P1, P_arr, X_arr, verbose=False):
     valid_coords_ind = np.argmax(valid_coords)
     X_valid = X_arr[valid_coords_ind]
     P2_valid = P_arr[valid_coords_ind]
-    P2_valid = P2_valid / P2_valid[-1,-1]
+    # P2_valid = P2_valid / P2_valid[-1,-1]
     
     if verbose:
         print('No. valid coords for each camera pair:', valid_coords)
@@ -817,8 +817,8 @@ def linearize_reprojection_error(P1, P2, Xj, x1j, x2j):
 
 def compute_update(r, J, mu):
     I = np.eye(np.size(J,1))
-    delta_Xj = -LA.inv(J.T @ J + mu*I) @ J.T @ r
-    return delta_Xj
+    delta = -LA.inv(J.T @ J + mu*I) @ J.T @ r
+    return delta
 
 def optimize_X(P1, P2, X, x1, x2, mu_init, n_its, verbose=False):
 
