@@ -762,7 +762,7 @@ def compute_average_error(x_proj, x_img):
     avg_err = np.sum(err) / np.size(err,0)
     return avg_err
 
-def compute_reprojection_error(P1, P2, Xj, x1j, x2j):
+def compute_reprojection_error_wrt_X(P1, P2, Xj, x1j, x2j):
 
     x1j_proj = transform_and_dehomogenize(P1, Xj)
     x2j_proj = transform_and_dehomogenize(P2, Xj)
@@ -774,7 +774,7 @@ def compute_reprojection_error(P1, P2, Xj, x1j, x2j):
 
     return reproj_err, res
 
-def compute_total_reprojection_error(P1, P2, X_est, x1, x2, verbose=False):
+def compute_total_reprojection_error_wrt_X(P1, P2, X_est, x1, x2, verbose=False):
 
     n_pts = np.size(X_est,1)
     reproj_err_tot = []
@@ -786,7 +786,7 @@ def compute_total_reprojection_error(P1, P2, X_est, x1, x2, verbose=False):
         x1j = x1[:,j]
         x2j = x2[:,j]
 
-        reproj_err, res = compute_reprojection_error(P1, P2, Xj, x1j, x2j)
+        reproj_err, res = compute_reprojection_error_wrt_X(P1, P2, Xj, x1j, x2j)
         reproj_err_tot.append(reproj_err)
         res_tot.append(res)
     
@@ -799,25 +799,24 @@ def compute_total_reprojection_error(P1, P2, X_est, x1, x2, verbose=False):
 
     return reproj_err_tot, res_tot
 
-def compute_jacobian_of_r(Pi, Xj):
-    J1 = (Pi[-1,:] * (Pi[0,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (Pi[0,:] / (Pi[-1,:] @ Xj))
-    J2 = (Pi[-1,:] * (Pi[1,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (Pi[1,:] / (Pi[-1,:] @ Xj))
-    J = np.row_stack((J1, J2))
-    return J
+def compute_jacobian_of_residual_wrt_X(Pi, Xj):
+    jac1 = (Pi[-1,:] * (Pi[0,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (Pi[0,:] / (Pi[-1,:] @ Xj))
+    jac2 = (Pi[-1,:] * (Pi[1,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (Pi[1,:] / (Pi[-1,:] @ Xj))
+    jac = np.row_stack((jac1, jac2))
+    return jac
 
-def linearize_reprojection_error(P1, P2, Xj, x1j, x2j):
+def linearize_reprojection_error_wrt_X(P1, P2, Xj, x1j, x2j):
 
-    _, r = compute_reprojection_error(P1, P2, Xj, x1j, x2j)
-
-    J1 = compute_jacobian_of_r(P1, Xj)
-    J2 = compute_jacobian_of_r(P2, Xj)
-    J = np.row_stack((J1, J2))
+    _, res = compute_reprojection_error_wrt_X(P1, P2, Xj, x1j, x2j)
+    jac1 = compute_jacobian_of_residual_wrt_X(P1, Xj)
+    jac2 = compute_jacobian_of_residual_wrt_X(P2, Xj)
+    jac = np.row_stack((jac1, jac2))
     
-    return r, J
+    return res, jac
 
-def compute_update(r, J, mu):
-    I = np.eye(np.size(J,1))
-    delta = -LA.inv(J.T @ J + mu*I) @ J.T @ r
+def compute_update(res, jac, mu):
+    I = np.eye(jac.shape[1])
+    delta = -LA.inv(jac.T @ jac + mu*I) @ jac.T @ res
     return delta
 
 def optimize_X(P1, P2, X, x1, x2, mu_init, n_its, verbose=False):
@@ -838,12 +837,12 @@ def optimize_X(P1, P2, X, x1, x2, mu_init, n_its, verbose=False):
         while (t <= n_its) and converged is not True:
         
             t += 1
-            r, J = linearize_reprojection_error(P1, P2, Xj, x1j, x2j)
-            delta_Xj = compute_update(r, J, mu)
+            res, jac = linearize_reprojection_error_wrt_X(P1, P2, Xj, x1j, x2j)
+            delta_Xj = compute_update(res, jac, mu)
             Xj_opt = dehomogenize(Xj + delta_Xj)
             
-            reproj_err, _ = compute_reprojection_error(P1, P2, Xj, x1j, x2j)
-            reproj_err_opt, _ = compute_reprojection_error(P1, P2, Xj_opt, x1j, x2j)
+            reproj_err, _ = compute_reprojection_error_wrt_X(P1, P2, Xj, x1j, x2j)
+            reproj_err_opt, _ = compute_reprojection_error_wrt_X(P1, P2, Xj_opt, x1j, x2j)
 
             if np.isclose(reproj_err_opt, reproj_err):
                 converged = True
