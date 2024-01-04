@@ -7,12 +7,6 @@ from matplotlib.pyplot import cm
 import computer_vision as cv
 from tqdm import trange
 from scipy.spatial.transform import Rotation
-# from scipy.io import loadmat
-# import matplotlib.image as mpimg
-# import matplotlib as mpl
-# import time
-# from get_dataset_info import *
-# import cv2
 
 
 def plot_cameras_and_axes(ax, C_list, axis_list, s, valid_idx, col):
@@ -75,7 +69,7 @@ def compute_rotation_averaging(imgs, init_pair, K, pixel_threshold, plot=False):
 
     marg = 0.75
     min_its = 0
-    max_its = 10000
+    max_its = 50000
     scale_its = 4
     alpha = 0.99
     P1 = cv.get_canonical_camera()
@@ -112,7 +106,7 @@ def compute_rotation_averaging(imgs, init_pair, K, pixel_threshold, plot=False):
             feasable_pts = cv.compute_feasible_points(P1, P2, X, percentile)
             P_arr = np.array([P1, P2])
             C_arr, axis_arr = cv.compute_camera_center_and_normalized_principal_axis(P_arr, multi=True)
-            plot_cameras_and_3D_points(X[:,feasable_pts], C_arr, axis_arr, s=1, valid_idx=None, multi=False)
+            plot_cameras_and_3D_points(X[:,feasable_pts], C_arr, axis_arr, s=1, valid_idx=[0,1], multi=False)
 
     rel_cameras = np.array(rel_cameras)
     rel_rots = rel_cameras[:,:,:-1]
@@ -125,7 +119,7 @@ def compute_initial_3D_points(imgs, init_pair, K, pixel_threshold, plot=False):
 
     K_inv = LA.inv(K)
     min_its = 10000
-    max_its = 20000
+    max_its = 50000
     scale_its = 3
     alpha = 0.99
     marg = 0.75
@@ -167,7 +161,7 @@ def compute_translation_registration(K, imgs, init_pair, pixel_threshold, abs_ro
     K_inv = LA.inv(K)
     marg = 0.75
     min_its = 0
-    max_its = 10000
+    max_its = 20000
     scale_its = 1
     alpha = 0.99
 
@@ -197,7 +191,7 @@ def compute_translation_registration(K, imgs, init_pair, pixel_threshold, abs_ro
         R = abs_rots[i]
 
         if ransac:
-            T, inliers = cv.estimate_T_robust(K, R, X[:-1], x_norm, min_its, max_its, scale_its, alpha, 5*pixel_threshold, DLT1=False, verbose=True)
+            T, inliers = cv.estimate_T_robust(K, R, X[:-1], x_norm, min_its, max_its, scale_its, alpha, pixel_threshold, DLT1=False, verbose=True)
         else:
             T = cv.estimate_T_DLT_2(R, x_norm, verbose=False)
             inliers = np.ones(x_norm.shape[1], dtype=bool)
@@ -346,7 +340,8 @@ def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid
 
             min_its = 0
             max_its = 10000
-            scale_its = 1
+            scale_its = 4
+            alpha = 0.99
             _, inliers = cv.estimate_E_robust(K, x1_norm, x2_norm, min_its, max_its, scale_its, alpha, pixel_threshold, essential_matrix=True, homography=True, verbose=True)
         else:
             inliers = inliers_RA[i]

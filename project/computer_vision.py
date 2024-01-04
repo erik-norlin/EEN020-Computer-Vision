@@ -8,6 +8,7 @@ import matplotlib as mpl
 from matplotlib.pyplot import cm
 import cv2
 from tqdm import trange
+from scipy.spatial.transform import Rotation
 
 
 def load_image(path, multi=False):
@@ -1133,3 +1134,198 @@ def plot_image_points_projected_points_and_image(x_proj, x_img, img, path):
     fig.savefig(path, dpi=300)
 
     plt.show()
+
+def compute_reprojection_error_wrt_T_and_R(Pi, X, x):
+    
+    x_proj = dehomogenize(Pi @ X)
+    res = (x[:-1] - x_proj[:-1]).T.reshape(-1)
+    reproj_err = LA.norm(res)**2
+    
+    return reproj_err, res
+
+def compute_total_reprojection_error_wrt_T_and_R(P_arr, X_init, X_idx_arr, x_arr, inliers_arr, verbose=False):
+
+    n_cameras = P_arr.shape[0]
+    reproj_err_tot = []
+    res_tot = []
+
+    for i in range(n_cameras):
+
+        Pi = P_arr[i]
+        Ti = Pi[:,-1].copy()
+
+        if not np.isnan(Ti[0]):
+
+            inliers = inliers_arr[i]
+            X_idx = X_idx_arr[i]
+
+            X = X_init[:,X_idx][:,inliers]
+            x = x_arr[i][:,inliers]
+
+            reproj_err, res = compute_reprojection_error_wrt_T_and_R(Pi, X, x)
+            reproj_err_tot.append(reproj_err)
+            res_tot.append(res)
+    
+    res_tot = np.concatenate(res_tot, 0)
+
+    if verbose:
+        print('\nTotal reprojection error:', round(np.sum(reproj_err_tot), 2))
+        print('Median reprojection error:', round(np.median(reproj_err_tot), 2))
+        print('Avg. reprojection error:', round(np.mean(reproj_err_tot), 2))
+
+    return reproj_err_tot, res_tot
+
+def compute_jacobian_of_residual_wrt_T(Pi, Xj):
+    jac1 = ((Pi[0,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (1 / (Pi[-1,:] @ Xj))
+    jac2 = ((Pi[1,:] @ Xj) / (Pi[-1,:] @ Xj)**2) - (1 / (Pi[-1,:] @ Xj))
+    jac = np.row_stack((jac1, jac2))
+    return jac
+
+def compute_jacobian_of_residual_wrt_T1(Pi, Xj):
+    jac1 = -1 / (Pi[-1,:] @ Xj)
+    jac2 = np.zeros(Xj.shape[1])
+    jac = np.row_stack((jac1, jac2))
+    return jac
+ 
+def compute_jacobian_of_residual_wrt_T2(Pi, Xj):
+    jac1 = np.zeros(Xj.shape[1])
+    jac2 = -1 / (Pi[-1,:] @ Xj)
+    jac = np.row_stack((jac1, jac2))
+    return jac
+
+def compute_jacobian_of_residual_wrt_T3(Pi, Xj):
+    jac1 = (Pi[0,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)
+    jac2 = (Pi[1,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)
+    jac = np.row_stack((jac1, jac2))
+    return jac
+
+def compute_jacobian_of_residual_wrt_q1(Pi, qi, Xj):
+    ddx_R3X_q1 = -2*qi[2]*Xj[0] + 2*qi[1]*Xj[2]
+    jac1 = ((Pi[0,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q1 + (1 / (Pi[-1,:] @ Xj)) * (-2*qi[3]*Xj[1] + 2*qi[2]*Xj[2])
+    jac2 = ((Pi[1,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q1 + (1 / (Pi[-1,:] @ Xj)) * (2*qi[3]*Xj[0] - 2*qi[1]*Xj[2])
+    jac = np.row_stack((jac1, jac2))
+    return jac
+
+def compute_jacobian_of_residual_wrt_q2(Pi, qi, Xj):
+    ddx_R3X_q2 = 2*qi[3]*Xj[0] + 2*qi[0]*Xj[1] - 8*qi[1]*(qi[1]**2+qi[2]*Xj[2])
+    jac1 = ((Pi[0,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q2 + (1 / (Pi[-1,:] @ Xj)) * (2*qi[2]*Xj[1] + 2*qi[3]*Xj[2])
+    jac2 = ((Pi[1,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q2 + (1 / (Pi[-1,:] @ Xj)) * (2*qi[2]*Xj[0] + 8*qi[1]*(qi[1]**2+qi[2]*Xj[1]) - 2*qi[0]*Xj[2])
+    jac = np.row_stack((jac1, jac2))
+    return jac
+
+def compute_jacobian_of_residual_wrt_q3(Pi, qi, Xj):
+    ddx_R3X_q3 = -2*qi[0]*Xj[0] + 2*qi[3]*Xj[1] - 4*(qi[1]**2+qi[2])*Xj[2]
+    jac1 = ((Pi[0,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q3 + (1 / (Pi[-1,:] @ Xj)) * (-8*(qi[2]**2+qi[3])*qi[2]*Xj[0] + 2*qi[1]*Xj[1] + 2*qi[0]*Xj[2])
+    jac2 = ((Pi[1,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q3 + (1 / (Pi[-1,:] @ Xj)) * (-2*qi[1]*Xj[1] + 2*qi[3]*Xj[2])
+    jac = np.row_stack((jac1, jac2))
+    return jac
+
+def compute_jacobian_of_residual_wrt_q4(Pi, qi, Xj):
+    ddx_R3X_q4 = 2*qi[1]*Xj[0] + 2*qi[2]*Xj[1]
+    jac1 = ((Pi[0,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q4 + (1 / (Pi[-1,:] @ Xj)) * (-4*(qi[2]**2+qi[3])*Xj[0] - 2*qi[0]*Xj[1] + 2*qi[1]*Xj[2])
+    jac2 = ((Pi[1,:] @ Xj) / ((Pi[-1,:] @ Xj)**2)) * ddx_R3X_q4 + (1 / (Pi[-1,:] @ Xj)) * (-2*qi[0]*Xj[1] - 4*(qi[1]**2+qi[3])*Xj[1] + 2*qi[2]*Xj[2])
+    jac = np.row_stack((jac1, jac2))
+    return jac
+
+def linearize_reprojection_error_wrt_T_and_R(Pi, qi, X, x):
+    
+    _, res = compute_reprojection_error_wrt_T_and_R(Pi, X, x)
+
+    jac_T1 = compute_jacobian_of_residual_wrt_T1(Pi, X).T.reshape(-1)
+    jac_T2 = compute_jacobian_of_residual_wrt_T2(Pi, X).T.reshape(-1)
+    jac_T3 = compute_jacobian_of_residual_wrt_T3(Pi, X).T.reshape(-1)
+
+    jac_q1 = compute_jacobian_of_residual_wrt_q1(Pi, qi, X).T.reshape(-1)
+    jac_q2 = compute_jacobian_of_residual_wrt_q2(Pi, qi, X).T.reshape(-1)
+    jac_q3 = compute_jacobian_of_residual_wrt_q3(Pi, qi, X).T.reshape(-1)
+    jac_q4 = compute_jacobian_of_residual_wrt_q4(Pi, qi, X).T.reshape(-1)
+    
+    return res, jac_T1, jac_T2, jac_T3, jac_q1, jac_q2, jac_q3, jac_q4
+
+def compute_update(res, jac, mu):
+    I = np.eye(jac.shape[1])
+    delta = -LA.inv(jac.T @ jac + mu*I) @ (jac.T @ res)
+    return delta
+
+def optimize_T_and_R(P_arr, X_init, X_idx_arr, x_arr, inliers_arr, mu_init, n_its, keep_rots, verbose=False):
+
+    if verbose:
+        print('\nReprojection error before bundle adjustment:')
+        _, _ = compute_total_reprojection_error_wrt_T_and_R(P_arr, X_init, X_idx_arr, x_arr, inliers_arr, verbose=True)
+
+    n_cameras = P_arr.shape[0]
+    steps = []
+
+    for i in trange(n_cameras):
+
+        Pi = P_arr[i]
+        Ri = Pi[:,:-1]
+        qi = Rotation.from_matrix(Ri).as_quat()
+        Ti = Pi[:,-1]
+
+        if keep_rots[i]:
+            
+            X_idx = X_idx_arr[i]
+            inliers = inliers_arr[i]
+
+            X = X_init[:,X_idx][:,inliers]
+            x = x_arr[i][:,inliers]
+
+            converged = False
+            mu = mu_init
+            step = 0
+        
+            while (step <= n_its) and converged is not True:
+                step += 1
+                
+                res, jac_T1, jac_T2, jac_T3, jac_q1, jac_q2, jac_q3, jac_q4 = linearize_reprojection_error_wrt_T_and_R(Pi, qi, X, x)
+
+                delta_T1 = compute_update(res[:,None], jac_T1[:,None], mu)
+                delta_T2 = compute_update(res[:,None], jac_T2[:,None], mu)
+                delta_T3 = compute_update(res[:,None], jac_T3[:,None], mu)
+
+                Ti_opt = np.array([Ti[0] + delta_T1[0,0], 
+                                   Ti[1] + delta_T2[0,0], 
+                                   Ti[2] + delta_T3[0,0]])
+
+                delta_q1 = compute_update(res[:,None], jac_q1[:,None], mu)
+                delta_q2 = compute_update(res[:,None], jac_q2[:,None], mu)
+                delta_q3 = compute_update(res[:,None], jac_q3[:,None], mu)
+                delta_q4 = compute_update(res[:,None], jac_q4[:,None], mu)
+
+                qi_opt = np.array([qi[0] + delta_q1[0,0], 
+                                   qi[1] + delta_q2[0,0], 
+                                   qi[2] + delta_q3[0,0],
+                                   qi[3] + delta_q4[0,0]])
+
+                R_opt = Rotation.from_quat(qi_opt / LA.norm(qi_opt)).as_matrix()
+                U, _, VT = LA.svd(R_opt, full_matrices=False)
+                Ri_opt = U @ VT
+
+                Pi_opt = np.column_stack((Ri_opt, Ti_opt[:,None]))
+                reproj_err, _ = compute_reprojection_error_wrt_T_and_R(Pi, X, x)
+                reproj_err_opt, _ = compute_reprojection_error_wrt_T_and_R(Pi_opt, X, x)
+
+                if np.isclose(reproj_err_opt, reproj_err):
+                    converged = True
+                elif reproj_err_opt < reproj_err:
+                    Ti = Ti_opt
+                    qi = qi_opt
+                    Ri = Ri_opt
+                    mu /= 10
+                else:
+                    mu *= 10
+
+            P_arr[i,:,-1] = Ti.copy()
+            P_arr[i,:,:-1] = Ri.copy()
+            steps.append(step)
+
+    if verbose:
+        print('\nReprojection error after bundle adjustment:')
+        _, _ = compute_total_reprojection_error_wrt_T_and_R(P_arr, X_init, X_idx_arr, x_arr, inliers_arr, verbose=True)
+
+        print('\nAvg its:', np.mean(steps))
+        print('Max its:', np.max(steps))
+        print('Min its:', np.min(steps))
+
+    return P_arr

@@ -101,7 +101,7 @@
 
 \section*{Algorithm}
 
-The algorithm consists of four parts; rotation averaging to estimate the absolute rotations of the cameras, translation registration to estimate the translations of the cameras, camera refinement to adjust the cameras, and triangulation of the final 3D-reconstruction.
+The algorithm consists of four parts; rotation averaging to estimate the absolute rotations of the cameras, translation registration to estimate the translations of the cameras, camera refinement to bundle adjust the cameras, and triangulation of the final 3D-reconstruction.
 
 \subsection*{Rotation averaging}
 All absolute rotations are obtained by chaining the relative rotations of each adjacent camera pair as $R_j=R_{i,j}R_i$. The relative rotations are extracted from robustly estimated essential matrices and normalized by taking the singular value decomposition of $R_{i,j}$ and setting $R_{i,j}=UV^T$.
@@ -125,7 +125,7 @@ Camera translations are robustly estimated in a RANSAC loop one by one for a min
 
 \begin{equation}\label{eq:1}
 \begin{pmatrix}
-[\textbf{x}_{ij}]_\times & [\textbf{x}_{ij}]_\times R_i
+[\textbf{x}_{ij}]_\times \mid [\textbf{x}_{ij}]_\times R_i
 \end{pmatrix}
 \begin{pmatrix}
 \textbf{T}_i \\ \textbf{X}_j
@@ -138,25 +138,11 @@ Camera translations are robustly estimated in a RANSAC loop one by one for a min
 Initially, the translations were solved from a 2-point method obtained by simplifying \texttt{estimate\_P\_DLT} from assignment 2. Unfortunately, this method does not result in inliers for all cameras, only for some, even with extremely large values for the pixel-threshold. At times, some cameras only get one inlier, and these initial estimates turns out to never be good enough for the bundle adjustment to yield satisfactory final 3D-reconstructions. Instead, solving $\textbf{T}_i$ from eq. \ref{eq:1} for a minimal sample of two showed to result in more inliers and better 3D-reconstructions after bundle adjustment. Enough inliers for all translations are still not obtained by doing this, though. On top of this, when triangulating 3D-reconstructions using bad robust estimates of the translations, optimized or not, the SVD can sometime have a hard time converging resulting in throwing an exception. With all these issues at hand, non-robust translations are also estimated using all 2D-3D correspondences as a compromise to get translation vectors for all cameras.
 
 \subsection*{Camera refinement}
-The absolute rotations and non-robust translations are refined by minimizing the squared reprojection error using Levenberg-Marquardt (LM) where the rotations are parametrized as quaternions when being optimized. More specifically, LM is implemented using Scipy's least squares module where it optimizes with respect to all rotations (quaternion parameters) and translations simultaneously.
+The absolute rotations and non-robust translations are refined by minimizing the squared reprojection error using Levenberg-Marquardt (LM) where the rotations are parametrized as quaternions when being optimized. A modified version of LM from assignment 4 was first implemented for this where the rotations and the translations are optimized and the 3D-points assumed fixed. The rotations were first parametrized to axis-angle representation but doing this was infeasible. The rotations of the cameras are so small for some data sets that the angle representation is practically zero resulting in singularity in the parametrization. Instead, the rotations are parametrized as quaternions which avoids this issue.
 
+The updates $\delta \textbf{T}_i$ and $\delta \textbf{q}_i$ are computed using the jacobian of the residuals. The jacobian of the residual with respect to the translation parameters are analytically calculated as 
 
-\subsection*{Final 3D-reconstruction}
-Two final 3D-reconstructions are obtained by accumulating triangulated 3D-points using cameras and image correspondences for each adjacent camera pair. The first showing the reconstruction of the un-refined cameras pairs, and the other showing the reconstruction of the refined cameras pairs.
-
-
-\section*{Implementation and discussion}
-
-There were two main issues with getting the implementation to work. 
-
-Using a simplified version of \texttt{estimate\_P\_DLT} from assignment 2 was expected for the robust estimation of the translations. 
-
-The latter resulted in more inliers and better estimates for more translations and became therefore the method of choice. However, this did still not give estimates for all translations. For every dataset, there were always some cameras that never had \textit{any} inliers. Recalling collecting the number of inliers for a computer exercise in assignment 3, using matched SIFT-points from VLFEAT yielded about 1000 times more inliers than using matched SIFT-points from OpenCV. For this reason, a python wrapper for VLFEAT (ubcmatch not included) called "cyvlfeat" was implemented. Using SIFT-points obtained from cyvlfeat did not result in estimates for all translations either. Matching descriptors in Matlab did not make it better either. Since the number of inliers obtained from translation registration are already relatively low due to noise in the rotations, not having a large enough amount of good SIFT-matches from the start could potentially be enough of an issue to not yield a sufficient amount of inliers for translation registration to work. Though, it still remains unclear why the translation registration did not work properly. 
-
-Another issue that was never resolved was the LM algorithm. A modified version of the LM from assignment 4 was implemented where the rotation and the translations were optimized instead of the 3D-points. The rotations were first parametrized to axis-angle representation but doing this was not feasible because the rotations of the cameras were so small. The angle representation was practically zero resulting in singularity in the parametrization. Instead, the rotations were parametrized as quaternions which avoided this issue. The jacobian of the residual with respect to each parameter to optimize over was calculated as
-
-
-$$
+\begin{equation}
 \frac{\partial\textbf{r}}{\partial \textbf{T}_i^1} =
 \begin{bmatrix}
 \frac{-1}{R_i^3\textbf{X}_j+\textbf{T}_i^3} \\
@@ -176,22 +162,19 @@ $$
 \\
 \frac{R_i^2\textbf{X}_j+\textbf{T}_i^2}{(R_i^3\textbf{X}_j+\textbf{T}_i^3)^2} 
 \end{bmatrix}
-$$
+\end{equation}
 
-and
+The jacobian of the residual with respect to the quaternion parameters are tedious but are implemented and can be found in \texttt{compute\_jacobian\_of\_residual\_wrt\_q} in \texttt{computer\_vision.py}.
 
+The cameras are optimized one by one and LA is terminated when the reprojection error is "too close" to the reprojection error of the previous iteration. However, the cameras that are returned from the optimization are essentially the same as before. This is especially true for the robustly estimated translations. As mentioned before, not many 2D-3D inliers are obtained from \texttt{estimate\_T\_robust}. This leads to minuscule reprojection errors and hence instantaneous convergence even though the refined cameras yield disastrous reconstructions. The non-robust translations result in larger reprojection error and LA is capable of decreasing this, however only a tiny fraction. One fix that could potentially improve the implementation is to optimize over all parameters of all cameras simultaneously in order to increase the reprojection error and give LA more to work with. It still remains unclear why this implementation does not work as expected, though.
 
-Running the optimization barely had an impact because the total reprojection error of the few 2D-3D inliers estimated previously was close to zero even before optimization, essentially leading to returning the same cameras initially. As a way of having a reference, Scipy's LM module for least squares was implemented. Refining the cameras one by one was first tested but resulted in poor 3D-reconstructions. Refining all cameras simultaneously yielded satisfactory results. The 3D-reconstructions from each adjacent camera pair aligned closely with each other with slight offset, which is reasonable since this is not a full scale bundle adjustment.
+Resorting to other options, LM is instead implemented using Scipy's least squares module where LM is an available method. Refining all cameras at once using this module is convenient and it turns out that this yields satisfying 3D-reconstructions. The 3D-reconstructions from each adjacent camera pair aligns closely with each other with slight offset, which is reasonable since this is not a full scale bundle adjustment.
 
-This version is less interpretable but does a very good job.
-
-Triangulating 3D-points with some cameras resulted in SVD not converging. It was 
-
-
-Document threshold change
+\subsection*{Final 3D-reconstruction}
+Two final 3D-reconstructions are obtained by accumulating triangulated 3D-points using cameras and image correspondences for each adjacent camera pair. The first showing the reconstruction of the un-refined camera pairs, and the other showing the reconstruction of the refined camera pairs.
 
 
-Initial 3D essential, thr*3
+
 
 \section*{Running the software}
 
@@ -212,13 +195,126 @@ The files of the actual implementation are
 \item \texttt{main.py}
 \item \texttt{pipeline.py}
 \end{itemize}
-which need to be in the working directory together with a \texttt{data} folder containing numerated sub-folders with data sets.
+which all need to be in the working directory together with a \texttt{data} folder containing numerated sub-folders with data sets.
 
-Run the software with \texttt{main.py}. Two arguments can be passed in; \texttt{-dataset} (required) and \texttt{-T\_robust} (not required). \texttt{-dataset} takes an integer and searches for the specified data set in the \texttt{data} folder. \texttt{-T\_robust} is a flag and if passed in, the translation vectors will be estimated robustly, but the convergence of SVD can occasionally fail when triangulating the final 3D-reconstruction due to the poor estimates of the translations. If left out, all 2D-3D correspondences will be used to estimate the translation vectors. Leaving \texttt{-T\_robust} out yields significantly better 3D-reconstructions after bundle adjustment in this implementation. 
+Run the software with \texttt{main.py} \texttt{-dataset <dataset>} \texttt{-T\_robust}. \texttt{-dataset} is required and takes an integer and searches for the specified data set in the \texttt{data} folder. \texttt{-T\_robust} is a flag and is not required, and if passed in, the translation vectors will be estimated robustly, but the convergence of SVD can occasionally fail when triangulating the final 3D-reconstruction due to the poor estimates of the robust translations. If left out, all 2D-3D correspondences will be used to estimate the translation vectors. Leaving \texttt{-T\_robust} out yields significantly better 3D-reconstructions after bundle adjustment in this implementation. 
+
+\section*{Reconstruction of the data sets with \texttt{T\_robust=True}}
+Figures \ref{fig:d3bt}-\ref{fig:d9at} show reconstructions of the data sets before and after LM optimization. 
+
+In data sets 3-7, the pixel-threshold for estimation of the essential matrix was the threshold of recommendation, and the threshold for estimation of the homography was 3 times the recommended threshold. For data sets 8 and 9 the recommended threshold was increased three times when estimating the initial essential matrix. For data sets 3-8, the pixel-threshold for robustly estimating the translations was set to 10 times larger than the recommended pixel-threshold in order to get 2D-3D inliers for most cameras. For data set 9, this threshold was increased to 20. 
+
+The 3D-point clouds obtained from triangulation from all adjacent camera pairs have different colors to visually differentiate them. The reconstructions does not look great before optimization, and afterwards we can see that most often a couple of point clouds align with each other with some offset showing that LM has improved the solutions. The reconstruction of data set 7 after LM in Figure \ref{fig:d7at} turns out to be the only data set where all translations are successfully robustly estimated and yields a proper 3D-reconstruction.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_2_before_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 3 before LM.}
+    \label{fig:d3bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_2_after_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 3 after LM. 4 point clouds align out of 11 possible.}
+    \label{fig:d3at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_3_before_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 4 before LM.}
+    \label{fig:d4bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_3_after_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 4 after LM. 3 point clouds out of 13 possible align reasonably well.}
+    \label{fig:d4at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_4_before_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 5 before LM.}
+    \label{fig:d5bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_4_after_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 5 after LM. 4 point clouds align out of 9 possible.}
+    \label{fig:d5at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_5_before_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 6 before LM.}
+    \label{fig:d6bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_5_after_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 6 after LM. 2 point clouds align out of 7 possible.}
+    \label{fig:d6at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_6_before_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 7 before LM.}
+    \label{fig:d7bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_6_after_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 7 after LM. Two point clouds align. This is the only data set where all translations were successfully robustly estimated and resulted in a reasonable final reconstruction. All point clouds align reasonably well.}
+    \label{fig:d7at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_7_before_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 7 before LM.}
+    \label{fig:d8bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_7_after_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 7 after LM. 4 point clouds align out of 11 possible.}
+    \label{fig:d8at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_8_before_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 8 before LM.}
+    \label{fig:d9bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_8_after_LM_2_robust_T.png}
+    \caption{Reconstruction of data set 8 after LM. 4 point clouds align out 7 possible.}
+    \label{fig:d9at}
+\end{figure}
+
 
 
 \section*{Reconstruction of the data sets with \texttt{T\_robust=False}}
-Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before and after LM optimization. The 3D-point clouds obtained from triangulation from all adjacent camera pairs have different colors to visually differentiate them. The reconstructions look horrendous before optimization, and afterwards we can see that the point clouds overlap each other with some offset showing that LM has improved the solutions. The final 3D-reconstructions of the data sets are not close to perfect, but considering that a full-scale bundle adjustment was not implemented, and that the translations of the cameras in the figures were not robustly estimated, lower quality of the reconstructions is expected.
+Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before and after LM optimization. In most data sets, the pixel-threshold for estimation of the essential matrix was the threshold of recommendation, and the threshold for estimation of the homography was 3 times the recommended threshold. For data sets 5, 6 and 7 the recommended threshold was increased three times. The 3D-point clouds obtained from triangulation from all adjacent camera pairs have different colors to visually differentiate them. The reconstructions look horrendous before optimization, and afterwards we can see that the point clouds overlap each other with some offset showing that LM has significantly improved the solutions. The final 3D-reconstructions of the data sets are not close to perfect, but considering that a full-scale bundle adjustment was not implemented, and that the translations of the cameras in the figures were not robustly estimated, lower quality of the reconstructions is expected.
 
 \begin{figure}[H]
     \centering
@@ -230,7 +326,7 @@ Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{dataset_2_after_LM_2.png}
-    \caption{Reconstruction of data set 3 after LM.}
+    \caption{Reconstruction of data set 3 after LM. All point clouds overlap.}
     \label{fig:d3a}
 \end{figure}
 
@@ -245,7 +341,7 @@ Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{dataset_3_after_LM_2.png}
-    \caption{Reconstruction of data set 4 after LM.}
+    \caption{Reconstruction of data set 4 after LM. All point clouds overlap.}
     \label{fig:d4a}
 \end{figure}
 
@@ -260,7 +356,7 @@ Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{dataset_4_after_LM_2.png}
-    \caption{Reconstruction of data set 5 after LM.}
+    \caption{Reconstruction of data set 5 after LM. All point clouds overlap.}
     \label{fig:d5a}
 \end{figure}
 
@@ -275,7 +371,7 @@ Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{dataset_5_after_LM_2.png}
-    \caption{Reconstruction of data set 6 after LM.}
+    \caption{Reconstruction of data set 6 after LM. All point clouds overlap.}
     \label{fig:d6a}
 \end{figure}
 
@@ -305,7 +401,7 @@ Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{dataset_7_after_LM_2.png}
-    \caption{Reconstruction of data set 8 after LM.}
+    \caption{Reconstruction of data set 8 after LM. All point clouds overlap.}
     \label{fig:d8a}
 \end{figure}
 
@@ -320,10 +416,13 @@ Figures \ref{fig:d3b}-\ref{fig:d9a} show reconstructions of the data sets before
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{dataset_8_after_LM_2.png}
-    \caption{Reconstruction of data set 9 after LM.}
+    \caption{Reconstruction of data set 9 after LM. All point clouds overlap.}
     \label{fig:d9a}
 \end{figure}
 
 
+\section*{Conclusion}
+
+In general the implementation works, but for some parts not exactly as expected according to the instructions of the assignment. Great efforts went to trying to get \texttt{estimate\_T\_robust} and LM to work properly but without success. Some compromises were made along the way as last resorts, and at the end the final 3D-reconstructions were deemed sufficient for most data sets.
 
 \end{document}
