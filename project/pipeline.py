@@ -1,19 +1,18 @@
 import numpy as np
 from numpy import linalg as LA
-from scipy.io import loadmat
 import scipy
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 from matplotlib.pyplot import cm
-import matplotlib as mpl
-import cv2
 import computer_vision as cv
 from tqdm import trange
-import time
-from get_dataset_info import *
 from scipy.spatial.transform import Rotation
-import sys
+# from scipy.io import loadmat
+# import matplotlib.image as mpimg
+# import matplotlib as mpl
+# import time
+# from get_dataset_info import *
+# import cv2
 
 
 def plot_cameras_and_axes(ax, C_list, axis_list, s, valid_idx, col):
@@ -22,7 +21,7 @@ def plot_cameras_and_axes(ax, C_list, axis_list, s, valid_idx, col):
 
         C = C_list[:,i]
         axis = axis_list[:,i]
-        ax.plot(C[0], C[1], C[2], 'o', color=col[i],  label='Camera {}'.format(i+1), alpha=0.7)
+        ax.plot(C[0], C[1], C[2], 'o', color=col[i],  label='Camera {}'.format(valid_idx[i]+1), alpha=0.7)
 
         x_axis = C[0] + s*axis[0]
         y_axis = C[1] + s*axis[1]
@@ -30,7 +29,7 @@ def plot_cameras_and_axes(ax, C_list, axis_list, s, valid_idx, col):
 
         ax.plot([x_axis, C[0]], [y_axis, C[1]], [z_axis, C[2]], '-', color=col[i], lw=3, alpha=0.7)
 
-def plot_cameras_and_3D_points(X_arr, C_arr, axis_arr, s, valid_idx, multi=False):
+def plot_cameras_and_3D_points(X_arr, C_arr, axis_arr, s, title, T_robust, valid_idx, multi=False):
     
     fig = plt.figure(figsize=(12,8))
     ax = plt.axes(projection='3d')
@@ -48,6 +47,7 @@ def plot_cameras_and_3D_points(X_arr, C_arr, axis_arr, s, valid_idx, multi=False
     ax.set_ylabel(r'$Y$')
     ax.set_zlabel(r'$Z$')
     ax.set_aspect('equal')
+    ax.set_title(title+' and T_robust={}'.format(T_robust))
     # ax.view_init(elev=-45, azim=-45, roll=180)
     fig.tight_layout()
     plt.legend(loc="lower right")
@@ -308,11 +308,10 @@ def create_cameras(abs_rots, trans):
         P = np.column_stack((R, T))
         cameras.append(P)
     cameras = np.array(cameras)
-    print('No. cameras:', cameras.shape[0])
     
     return cameras
 
-def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid_cameras, inliers_RA, x1_norm_RA, x2_norm_RA):
+def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid_cameras, inliers_RA, x1_norm_RA, x2_norm_RA, title, T_robust):
     print('\n\n\n### Triangulating final 3D-reconstruction ###\n')
 
     K_inv = LA.inv(K)
@@ -348,7 +347,7 @@ def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid
             min_its = 0
             max_its = 10000
             scale_its = 1
-            E, inliers = cv.estimate_E_robust(K, x1_norm, x2_norm, min_its, max_its, scale_its, alpha, pixel_threshold, essential_matrix=True, homography=True, verbose=True)
+            _, inliers = cv.estimate_E_robust(K, x1_norm, x2_norm, min_its, max_its, scale_its, alpha, pixel_threshold, essential_matrix=True, homography=True, verbose=True)
         else:
             inliers = inliers_RA[i]
             x1_norm = x1_norm_RA[i]
@@ -363,4 +362,4 @@ def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid
         X_final.append(X_inliers[:,feasible_pts])
 
     C_arr, axis_arr = cv.compute_camera_center_and_normalized_principal_axis(cameras[valid_idx], multi=True)
-    plot_cameras_and_3D_points(X_final, C_arr, axis_arr, s=0.5, valid_idx=valid_idx, multi=True)
+    plot_cameras_and_3D_points(X_final, C_arr, axis_arr, s=0.5, title=title, T_robust=T_robust, valid_idx=valid_idx, multi=True)
