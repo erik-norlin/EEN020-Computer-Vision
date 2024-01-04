@@ -457,7 +457,7 @@ def estimate_E_DLT(img1_pts_norm, img2_pts_norm, enforce=False, verbose=False):
     E = E/E[-1,-1]
     return E
 
-def estimate_E_robust(K, x1_norm, x2_norm, n_its, n_samples, err_threshold_px):
+def estimate_E_robust_simple(K, x1_norm, x2_norm, n_its, n_samples, err_threshold_px):
     
     err_threshold = err_threshold_px / K[0,0]
     best_inliers = None
@@ -481,6 +481,143 @@ def estimate_E_robust(K, x1_norm, x2_norm, n_its, n_samples, err_threshold_px):
         
     return best_E, best_inliers
 
+def compute_E_validity(E):
+    rank = LA.matrix_rank(E)
+    valid = True if rank == 2 else False
+    return valid
+
+def compute_E_inliers(E, x1_norm, x2_norm, err_threshold):
+    
+    distance1_arr, distance2_arr = compute_epipolar_errors(E, x1_norm, x2_norm)
+    inliers = ((distance1_arr**2 + distance2_arr**2) / 2) < err_threshold**2
+    n_inliers = np.sum(inliers)
+    epsilon_E = n_inliers / x1_norm.shape[1]
+
+    return epsilon_E, inliers
+
+def verbose_E_robust(t, T_E, T_H, epsilon_E, epsilon_H, inliers, method):
+    print('Iteration:', t, 'T_E:', T_E, 'T_H:', T_H, 'epsilon_E:', np.round(epsilon_E, 2), 'epsilon_H:', np.round(epsilon_H, 2), 'No. inliers:', np.sum(inliers), 'From:', method)
+
+def estimate_E_robust(K, x1_norm, x2_norm, min_its, max_its, scale_its, alpha, err_threshold_px, essential_matrix=True, homography=True, verbose=False):
+    
+    err_threshold = err_threshold_px / K[0,0]
+    best_E = None
+    best_inliers = None
+    n_points = x1_norm.shape[1]
+    n_E_samples = 8
+    n_H_samples = 4
+    best_epsilon_E = 0
+    best_epsilon_H = 0
+    T_E = max_its
+    T_H = max_its
+
+    t = 0
+    while t < T_E and t < T_H:
+        t += 1
+
+        if essential_matrix:
+            rand_mask = np.random.choice(n_points, n_E_samples, replace=False)
+            E = estimate_E_DLT(x1_norm[:,rand_mask], x2_norm[:,rand_mask], enforce=True, verbose=False)
+            E_valid = compute_E_validity(E)
+
+            if E_valid:
+                epsilon_E, inliers = compute_E_inliers(E, x1_norm, x2_norm, err_threshold)
+                    
+                if epsilon_E > best_epsilon_E:
+                    best_E = np.copy(E)
+                    best_inliers = np.copy(inliers)
+                    best_epsilon_E = epsilon_E
+                    T_E = compute_ransac_iterations(alpha, best_epsilon_E, n_E_samples, min_its, max_its, scale_its)
+
+                    if verbose:
+                        verbose_E_robust(t, T_E, T_H, best_epsilon_E, best_epsilon_H, best_inliers, method='E 8-point alg.')
+        
+        if homography:
+            rand_mask = np.random.choice(n_points, n_H_samples, replace=False)
+            H = estimate_H_DLT(x1_norm[:,rand_mask], x2_norm[:,rand_mask], verbose=False)
+            x2_norm_proj = dehomogenize(H @ x1_norm)
+            distance_arr = compute_point_point_distance(x2_norm_proj, x2_norm)
+            inliers = distance_arr < (3*err_threshold)
+            n_inliers = np.sum(inliers)
+            epsilon_H = n_inliers / n_points
+
+            if epsilon_H > best_epsilon_H:
+                
+                # num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H, np.eye(3))
+                R1, T1, R2, T2 = homography_to_RT(H, x1_norm, x2_norm)
+                E1 = compute_E_from_R_and_T(R1, T1)
+                E2 = compute_E_from_R_and_T(R2, T2)
+
+                E1_valid = compute_E_validity(E1)
+                E2_valid = compute_E_validity(E2)
+
+                if E1_valid:
+                    epsilon_E, inliers = compute_E_inliers(E1, x1_norm, x2_norm, err_threshold)
+                        
+                    if epsilon_E > best_epsilon_E:
+                        best_E = np.copy(E1)
+                        best_inliers = np.copy(inliers)
+                        best_epsilon_E = epsilon_E
+                        best_epsilon_H = epsilon_H
+                        T_E = compute_ransac_iterations(alpha, best_epsilon_E, n_E_samples, min_its, max_its, scale_its)
+                        T_H = compute_ransac_iterations(alpha, best_epsilon_H, n_H_samples, min_its, max_its, scale_its)
+
+                        if verbose:
+                            verbose_E_robust(t, T_E, T_H, best_epsilon_E, best_epsilon_H, best_inliers, method='H 4-point alg.')
+
+                if E2_valid:
+                    epsilon_E, inliers = compute_E_inliers(E2, x1_norm, x2_norm, err_threshold)
+                        
+                    if epsilon_E > best_epsilon_E:
+                        best_E = np.copy(E2)
+                        best_inliers = np.copy(inliers)
+                        best_epsilon_E = epsilon_E
+                        best_epsilon_H = epsilon_H
+                        T_E = compute_ransac_iterations(alpha, best_epsilon_E, n_E_samples, min_its, max_its, scale_its)
+                        T_H = compute_ransac_iterations(alpha, best_epsilon_H, n_H_samples, min_its, max_its, scale_its)
+                        
+                        if verbose:
+                            verbose_E_robust(t, T_E, T_H, best_epsilon_E, best_epsilon_H, best_inliers, method='H 4-point alg.')
+        
+    print('Bailout at iteration:', t)
+    return best_E, best_inliers
+
+def estimate_T_robust(K, R, X, x_norm, min_its, max_its, scale_its, alpha, err_threshold_px, DLT1=False, verbose=False):
+    
+    err_threshold = err_threshold_px / K[0,0]
+    best_T = np.full(3, np.nan)
+    best_inliers = np.zeros(x_norm.shape[1], dtype=bool)
+    best_epsilon = 0
+    n_points = x_norm.shape[1]
+    n_samples = 2
+    ransac_its = max_its
+
+    t = 0
+    while t < ransac_its:
+        t += 1
+
+        rand_mask = np.random.choice(n_points, n_samples, replace=False)
+        if DLT1:
+            T = estimate_T_DLT_1(x_norm[:,rand_mask], verbose=False)
+        else:
+            T = estimate_T_DLT_2(R, x_norm[:,rand_mask], verbose=False)
+
+        x_norm_proj = dehomogenize(R @ X + T[:,None])
+        distance_arr = compute_point_point_distance(x_norm_proj, x_norm)
+        inliers = distance_arr < err_threshold
+        n_inliers = np.sum(inliers)
+        epsilon = n_inliers / n_points
+
+        if epsilon > best_epsilon:
+            best_T = np.copy(T)
+            best_inliers = np.copy(inliers)
+            best_epsilon = epsilon
+            ransac_its = compute_ransac_iterations(alpha, best_epsilon, n_samples, min_its, max_its, scale_its)
+            if verbose:
+                print('Iteration:', t, 'T:', ransac_its, 'epsilon:', np.round(best_epsilon, 2), 'No. inliers:', np.sum(inliers))
+    
+    print('Bailout at iteration:', t)
+    return best_T, best_inliers
 
 def compute_ransac_iterations(alpha, epsilon, s, min_its, max_its, scale):
     T = scale * np.ceil(np.log(1-alpha) / np.log(1-epsilon**s))
@@ -583,85 +720,158 @@ def RQ_decompose(a):
 
     return r, q
 
-def compute_sift_points(img1, img2, marg, verbose=False):
+def compute_feasible_points(P1, P2, X, percentile, ransac=True):
+    
+    if ransac:
+        x1 = P1 @ X
+        x2 = P2 @ X
+        x1_filter = x1[-1,:] > 0
+        x2_filter = x2[-1,:] > 0
+
+    X_bar = np.mean(X, axis=1)
+    X_norm = LA.norm(X - X_bar[:,None], axis=0)
+    norm_percentile = np.percentile(X_norm, percentile)
+    outlier_filter = X_norm < norm_percentile
+
+    if ransac:
+        feasible_pts = x1_filter * x2_filter * outlier_filter
+    else:
+        feasible_pts = outlier_filter
+    return feasible_pts
+
+def compute_absolute_rotations(rel_rots, origin_idx, verbose=False):
+    
+    abs_rots = [rel_rots[0]]
+    for i in range(len(rel_rots)-1):
+
+        Ri = abs_rots[i]
+        R2 = rel_rots[i+1]
+        if LA.det(R2) < 0:
+            print('WARNING: det(R{}) < 0, not a rotation!'.format(i), LA.det(R2))
+            R2 = -R2
+        U, _, VT = LA.svd(R2, full_matrices=False)
+        R2 = U @ VT
+        Rj = R2 @ Ri
+        abs_rots.append(Rj)
+
+    R0 = abs_rots[origin_idx]    
+    for i in range(len(abs_rots)):
+
+        Ri = abs_rots[i]
+        Ri = LA.inv(R0) @ Ri
+        abs_rots[i] = Ri
+
+        if verbose:
+            print('det(R{}):'.format(i), LA.det(Ri))
+        
+    return np.array(abs_rots)
+
+def compute_rots_trans_RA(rel_cameras):
+
+    P1 = rel_cameras[0]
+    rots = [P1[:,:-1]]
+    trans = [P1[:,-1]]
+
+    for i in range(rel_cameras.shape[0]-1):
+        P2 = rel_cameras[i+1]
+        P2 /= P2[-1,2]
+        R2 = P2[:,:-1]
+        T2 = P2[:,-1]
+
+        Ri = rots[i]
+        Ti = trans[i]
+
+        Rj = R2 @ Ri
+        Tj = T2 + (Rj @ Ri.T @ Ti)
+
+        rots.append(Rj)
+        trans.append(Tj)
+
+    rots = np.array(rots)
+    trans = np.array(trans)
+
+    return rots, trans
+
+def compute_sift_points(img1, img2, marg, flann=False, verbose=False):
     img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
-    # img1 = cv2.medianBlur(img1, ksize = 5)
-    # img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
-    # img1 = img1.astype(np.float32)
-
     img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-    # img2 = cv2.medianBlur(img2, ksize = 5)
-    # img2 = cv2.normalize(img2, None, 0, 255, cv2.NORM_MINMAX)
-    # img2 = img2.astype(np.float32)
 
-
-    # sift = cv2.SIFT_create(int nfeatures=0, int nOctaveLayers=3, double contrastThreshold=0.04, double edgeThreshold=10, double sigma=1.6)
     sift = cv2.SIFT_create()
     kp1, des1 = sift.detectAndCompute(img1, None)
     kp2, des2 = sift.detectAndCompute(img2, None)
 
-    FLANN_INDEX_KDTREE = 1
-    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-    search_params = dict(checks=50)   # or pass empty dictionary
+    if flann:
+        FLANN_INDEX_KDTREE = 1
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks=50)   # or pass empty dictionary
 
-    flann = cv2.FlannBasedMatcher(index_params, search_params)
-    matches = flann.knnMatch(des1, des2, k=2)
-
-    # bf = cv2.BFMatcher()
-    # matches = bf.knnMatch(des1, des2, k=2)
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+        matches = flann.knnMatch(des1, des2, k=2)
+    else:
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(des1, des2, k=2)
 
     good_matches = []
     for m, n in matches:
         if m.distance < marg*n.distance:
             good_matches.append([m])
 
-    draw_params = dict(matchColor=(255,0,255), singlePointColor=(0,255,0), matchesMask=None, flags=cv2.DrawMatchesFlags_DEFAULT)
-    img_match = cv2.drawMatchesKnn(img1, kp1, img2, kp2, good_matches, None, **draw_params)
-
     x1 = np.stack([kp1[match[0].queryIdx].pt for match in good_matches],1)
     x2 = np.stack([kp2[match[0].trainIdx].pt for match in good_matches],1)
-
     x1 = homogenize(x1, multi=True)
     x2 = homogenize(x2, multi=True)
 
-    x1 = np.stack([des1[match[0].queryIdx] for match in good_matches],1)
-    
+    des1 = np.stack([des1[match[0].queryIdx] for match in good_matches],0)
+    des2 = np.stack([des2[match[0].trainIdx] for match in good_matches],0)
 
     if verbose:
         print('Number of matches:', np.size(matches,0))
         print('Number of good matches:', np.size(x1,1))
 
-    return x1, x2, kp1, kp2, des1, des2, img_match
+    return x1, x2, des1, des2
 
-def compute_sift_points_sequential(kp1, des1, img2, marg, verbose=False):
+def compute_sift_points_TR(x1, des1, img2, marg, flann=False, verbose=False):
     img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+    # nfeatures=0
+    # sigma=1.6
+    # contrastThreshold=0.04
+    # edgeThreshold=10
+
+    # nfeatures=nfeatures,
+    # sigma=2/sigma,  
+    # contrastThreshold=2/contrastThreshold,
+    # edgeThreshold=2/edgeThreshold,
 
     sift = cv2.SIFT_create()
     kp2, des2 = sift.detectAndCompute(img2, None)
 
-    FLANN_INDEX_KDTREE = 1
-    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-    search_params = dict(checks=50)   # or pass empty dictionary
+    if flann:
+        FLANN_INDEX_KDTREE = 1
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks=50)   # or pass empty dictionary
 
-    flann = cv2.FlannBasedMatcher(index_params, search_params)
-    matches = flann.knnMatch(des1, des2, k=2)
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+        matches = flann.knnMatch(des1, des2, k=2)
+    else:
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(des1, des2, k=2)
 
     good_matches = []
     for m, n in matches:
         if m.distance < marg*n.distance:
             good_matches.append([m])
 
-    x1 = np.stack([kp1[match[0].queryIdx].pt for match in good_matches],1)
+    x_idx = np.array([match[0].queryIdx for match in good_matches])
+    x1 = np.stack([x1[:,match[0].queryIdx] for match in good_matches],1)
     x2 = np.stack([kp2[match[0].trainIdx].pt for match in good_matches],1)
-
-    x1 = homogenize(x1, multi=True)
     x2 = homogenize(x2, multi=True)
 
     if verbose:
         print('Number of matches:', np.size(matches,0))
         print('Number of good matches:', np.size(x1,1))
 
-    return x1, x2
+    return x1, x2, x_idx
 
 def get_sift_plot_points(img1_pts, img2_pts, img1):
     x = [img1_pts[0,:], np.size(img1,1)+img2_pts[0,:]]
