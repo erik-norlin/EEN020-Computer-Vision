@@ -656,7 +656,7 @@ def compute_and_plot_lines(l, img, ax):
         ax.plot(x, y, '-', lw=3, color=col[i], alpha=0.7)
 
 def compute_RMS_error(distance1_arr, distance2_arr):
-    e_rms = np.sqrt(np.sum(distance1_arr**2 + distance2_arr**2) / (2*np.size(D1, 0)))
+    e_rms = np.sqrt(np.sum(distance1_arr**2 + distance2_arr**2) / (2*np.size(distance1_arr, 0)))
     return e_rms
 
 def compute_point_point_distance(x_proj, x_img):

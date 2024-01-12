@@ -1,6 +1,6 @@
 import numpy as np
 from numpy import linalg as LA
-import scipy
+from scipy import optimize
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
@@ -265,7 +265,7 @@ def refine_rotations_and_translations(trans, abs_rots, X_init_feasible_inliers, 
     q_arr = np.concatenate(q_arr, 0)
 
     x0 = np.concatenate((trans[valid_cameras].ravel(), q_arr), 0)
-    res = scipy.optimize.least_squares(fun, x0, method='lm', args=(n_valid_cams, xs_norm, X_init_feasible_inliers[:-1], X_idx_TR, inliers_TR, valid_cameras))
+    res = optimize.least_squares(fun, x0, method='lm', args=(n_valid_cams, xs_norm, X_init_feasible_inliers[:-1], X_idx_TR, inliers_TR, valid_cameras))
 
     trans_opt_valid = res.x[:n_valid_cams * 3].reshape((n_valid_cams, 3))
     q_opt_valid = res.x[n_valid_cams * 3:].reshape((n_valid_cams, 4))
