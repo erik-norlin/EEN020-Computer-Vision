@@ -236,33 +236,46 @@ def estimate_camera_DLT(Xmodel, img_pts, verbose=False):
 
     return P
 
-def estimate_T_DLT_1(img_pts, verbose=False):
+def estimate_T_least_squares(R, X_pts, x_pts):
 
-    n = img_pts.shape[1]
-    M = []
+    n = x_pts.shape[1]
+    A = []
+    B = []
 
     for i in range(n):
 
-        x = img_pts[0,i]
-        y = img_pts[1,i]
+        x1 = x_pts[0,i]
+        x2 = x_pts[1,i]
 
-        m = np.array([[1, 0, -x],
-                      [0, 1, -y]])
+        X = R @ X_pts[:,i]
+        X1 = X[0]
+        X2 = X[1]
+        X3 = X[2]
+
+        a = np.array([[1, 0, -x1],
+                      [0, 1, -x2]])
         
-        M.append(m)
+        b = np.array([[X3*x1 - X1],
+                      [X3*x2 - X2]])
 
-    M = np.concatenate(M, 0)
-    U, S, VT = LA.svd(M, full_matrices=False)
-    T = VT[-1,:]
+        A.append(a)
+        B.append(b)
 
-    if verbose:
-        M_approx = U @ np.diag(S) @ VT
-        v = VT[-1,:]
-        Mv = M @ v
-        print('\n||Mv||:', (Mv @ Mv)**0.5)
-        print('||v||^2:', v @ v)
-        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
-        print('S:', S)
+    A = np.concatenate(A, 0)
+    B = np.concatenate(B, 0)
+    T = LA.lstsq(A, B, rcond=None)[0].flatten()
+
+    # U, S, VT = LA.svd(M, full_matrices=False)
+    # T = VT[-1,:]
+
+    # if verbose:
+    #     M_approx = U @ np.diag(S) @ VT
+    #     v = VT[-1,:]
+    #     Mv = M @ v
+    #     print('\n||Mv||:', (Mv @ Mv)**0.5)
+    #     print('||v||^2:', v @ v)
+    #     print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
+    #     print('S:', S)
 
     return T
 
@@ -583,7 +596,7 @@ def estimate_E_robust(K, x1_norm, x2_norm, min_its, max_its, scale_its, alpha, e
     print('Bailout at iteration:', t)
     return best_E, best_inliers
 
-def estimate_T_robust(K, R, X, x_norm, min_its, max_its, scale_its, alpha, err_threshold_px, DLT1=False, verbose=False):
+def estimate_T_robust(K, R, X, x_norm, min_its, max_its, scale_its, alpha, err_threshold_px, verbose=False):
     
     err_threshold = err_threshold_px / K[0,0]
     best_T = np.full(3, np.nan)
@@ -598,10 +611,7 @@ def estimate_T_robust(K, R, X, x_norm, min_its, max_its, scale_its, alpha, err_t
         t += 1
 
         rand_mask = np.random.choice(n_points, n_samples, replace=False)
-        if DLT1:
-            T = estimate_T_DLT_1(x_norm[:,rand_mask], verbose=False)
-        else:
-            T = estimate_T_DLT_2(R, x_norm[:,rand_mask], verbose=False)
+        T = estimate_T_least_squares(R, X[:,rand_mask], x_norm[:,rand_mask])
 
         x_norm_proj = dehomogenize(R @ X + T[:,None])
         distance_arr = compute_point_point_distance(x_norm_proj, x_norm)
@@ -1329,3 +1339,16 @@ def optimize_T_and_R(P_arr, X_init, X_idx_arr, x_arr, inliers_arr, mu_init, n_it
         print('Min its:', np.min(steps))
 
     return P_arr
+
+def plot_3D_points(X):
+    
+    fig = plt.figure()
+    ax = plt.axes(projection='3d')
+    ax.plot(X[0], X[1], X[2], '.', ms=1, color='magenta', label='X')
+    ax.set_xlabel('$x$')
+    ax.set_ylabel('$y$')
+    ax.set_zlabel('$z$')
+    ax.set_aspect('equal')
+    ax.legend(loc="lower right")
+    fig.tight_layout()
+    plt.show()

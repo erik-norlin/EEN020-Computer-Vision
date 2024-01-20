@@ -1,11 +1,13 @@
 import numpy as np
 from numpy import linalg as LA
+from scipy.io import loadmat
 from scipy import optimize
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 from matplotlib.pyplot import cm
+import matplotlib as mpl
 import computer_vision as cv
-from tqdm import trange
 from scipy.spatial.transform import Rotation
 
 
@@ -23,7 +25,7 @@ def plot_cameras_and_axes(ax, C_list, axis_list, s, valid_idx, col):
 
         ax.plot([x_axis, C[0]], [y_axis, C[1]], [z_axis, C[2]], '-', color=col[i], lw=3, alpha=0.7)
 
-def plot_cameras_and_3D_points(X_arr, C_arr, axis_arr, s, title, T_robust, valid_idx, multi=False):
+def plot_cameras_and_3D_points(X_arr, C_arr, axis_arr, s, title, valid_idx, multi=False):
     
     fig = plt.figure(figsize=(12,8))
     ax = plt.axes(projection='3d')
@@ -41,7 +43,7 @@ def plot_cameras_and_3D_points(X_arr, C_arr, axis_arr, s, title, T_robust, valid
     ax.set_ylabel(r'$Y$')
     ax.set_zlabel(r'$Z$')
     ax.set_aspect('equal')
-    ax.set_title(title+' and T_robust={}'.format(T_robust))
+    ax.set_title(title)
     # ax.view_init(elev=-45, azim=-45, roll=180)
     fig.tight_layout()
     plt.legend(loc="lower right")
@@ -68,8 +70,8 @@ def compute_rotation_averaging(imgs, init_pair, K, pixel_threshold, plot=False):
     n_camera_pairs = n_imgs-1
 
     marg = 0.75
-    min_its = 0
-    max_its = 50000
+    min_its = 15000
+    max_its = 20000
     scale_its = 4
     alpha = 0.99
     P1 = cv.get_canonical_camera()
@@ -106,7 +108,7 @@ def compute_rotation_averaging(imgs, init_pair, K, pixel_threshold, plot=False):
             feasable_pts = cv.compute_feasible_points(P1, P2, X, percentile)
             P_arr = np.array([P1, P2])
             C_arr, axis_arr = cv.compute_camera_center_and_normalized_principal_axis(P_arr, multi=True)
-            plot_cameras_and_3D_points(X[:,feasable_pts], C_arr, axis_arr, s=1, valid_idx=[0,1], multi=False)
+            plot_cameras_and_3D_points(X[:,feasable_pts], C_arr, axis_arr, s=1, title=None, valid_idx=[0,1], multi=False)
 
     rel_cameras = np.array(rel_cameras)
     rel_rots = rel_cameras[:,:,:-1]
@@ -118,8 +120,8 @@ def compute_initial_3D_points(imgs, init_pair, K, pixel_threshold, plot=False):
     print('\n\n\n### Computing initial 3D-points ###\n')
 
     K_inv = LA.inv(K)
-    min_its = 10000
-    max_its = 50000
+    min_its = 40000
+    max_its = 40000
     scale_its = 3
     alpha = 0.99
     marg = 0.75
@@ -155,12 +157,12 @@ def compute_initial_3D_points(imgs, init_pair, K, pixel_threshold, plot=False):
     
     return x1_init_norm_feasible_inliers, x2_init_norm_feasible_inliers, des1_init_feasible_inliers, des2_init_feasible_inliers, X_init_feasible_inliers, X_init_idx
 
-def compute_translation_registration(K, imgs, init_pair, pixel_threshold, abs_rots, x1_init_norm_feasible_inliers, x2_init_norm_feasible_inliers, des1_init_feasible_inliers, X_init_feasible_inliers, X_init_idx, ransac=False):
+def compute_translation_registration(K, imgs, init_pair, pixel_threshold, abs_rots, x1_init_norm_feasible_inliers, x2_init_norm_feasible_inliers, des1_init_feasible_inliers, X_init_feasible_inliers, X_init_idx):
     print('\n\n\n### Computing translation registration ###\n')
 
     K_inv = LA.inv(K)
     marg = 0.75
-    min_its = 0
+    min_its = 15000
     max_its = 20000
     scale_its = 1
     alpha = 0.99
@@ -190,12 +192,8 @@ def compute_translation_registration(K, imgs, init_pair, pixel_threshold, abs_ro
         X = X_init_feasible_inliers[:,X_idx]        
         R = abs_rots[i]
 
-        if ransac:
-            T, inliers = cv.estimate_T_robust(K, R, X[:-1], x_norm, min_its, max_its, scale_its, alpha, pixel_threshold, DLT1=False, verbose=True)
-        else:
-            T = cv.estimate_T_DLT_2(R, x_norm, verbose=False)
-            inliers = np.ones(x_norm.shape[1], dtype=bool)
-
+        T, inliers = cv.estimate_T_robust(K, R, X[:-1], x_norm, min_its, max_its, scale_its, alpha, pixel_threshold, verbose=True)
+        
         if np.isnan(T[0]):
             valid_cameras[i] = False
 
@@ -305,7 +303,7 @@ def create_cameras(abs_rots, trans):
     
     return cameras
 
-def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid_cameras, inliers_RA, x1_norm_RA, x2_norm_RA, title, T_robust):
+def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid_cameras, inliers_RA, x1_norm_RA, x2_norm_RA, title):
     print('\n\n\n### Triangulating final 3D-reconstruction ###\n')
 
     K_inv = LA.inv(K)
@@ -323,7 +321,7 @@ def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid
     print('Valid camera indices:', valid_idx)
 
     for idx in range(n_valid_cameras-1):
-        print('\nCamera pair:', idx+1, '/', n_valid_cameras-1)
+        print('Camera pair:', idx+1, '/', n_valid_cameras-1)
 
         i = valid_idx[idx]
         ij = valid_idx[idx+1]
@@ -340,9 +338,8 @@ def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid
 
             min_its = 0
             max_its = 10000
-            scale_its = 4
-            alpha = 0.99
-            _, inliers = cv.estimate_E_robust(K, x1_norm, x2_norm, min_its, max_its, scale_its, alpha, pixel_threshold, essential_matrix=True, homography=True, verbose=True)
+            scale_its = 1
+            E, inliers = cv.estimate_E_robust(K, x1_norm, x2_norm, min_its, max_its, scale_its, alpha, pixel_threshold, essential_matrix=True, homography=True, verbose=True)
         else:
             inliers = inliers_RA[i]
             x1_norm = x1_norm_RA[i]
@@ -357,4 +354,4 @@ def triangulate_final_3D_reconstruction(imgs, K, pixel_threshold, cameras, valid
         X_final.append(X_inliers[:,feasible_pts])
 
     C_arr, axis_arr = cv.compute_camera_center_and_normalized_principal_axis(cameras[valid_idx], multi=True)
-    plot_cameras_and_3D_points(X_final, C_arr, axis_arr, s=0.5, title=title, T_robust=T_robust, valid_idx=valid_idx, multi=True)
+    plot_cameras_and_3D_points(X_final, C_arr, axis_arr, s=0.5, title=title, valid_idx=valid_idx, multi=True)
