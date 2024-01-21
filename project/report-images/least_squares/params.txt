@@ -1,1 +1,0 @@
-dataset 3-4: pixel: E=*3, T=*3

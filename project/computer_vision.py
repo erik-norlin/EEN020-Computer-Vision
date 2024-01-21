@@ -265,44 +265,6 @@ def estimate_T_least_squares(R, X_pts, x_pts):
     B = np.concatenate(B, 0)
     T = LA.lstsq(A, B, rcond=None)[0].flatten()
 
-    # U, S, VT = LA.svd(M, full_matrices=False)
-    # T = VT[-1,:]
-
-    # if verbose:
-    #     M_approx = U @ np.diag(S) @ VT
-    #     v = VT[-1,:]
-    #     Mv = M @ v
-    #     print('\n||Mv||:', (Mv @ Mv)**0.5)
-    #     print('||v||^2:', v @ v)
-    #     print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
-    #     print('S:', S)
-
-    return T
-
-def estimate_T_DLT_2(R, img_pts, verbose=False):
-
-    n = img_pts.shape[1]
-    M = []
-
-    for i in range(n):
-
-        xx = create_skew_symmetric_matrix(img_pts[:,i])
-        m = np.column_stack((xx, xx @ R))
-        M.append(m)
-
-    M = np.concatenate(M, 0)
-    U, S, VT = LA.svd(M, full_matrices=False)
-    T = VT[-1,:3]
-
-    if verbose:
-        M_approx = U @ np.diag(S) @ VT
-        v = VT[-1,:]
-        Mv = M @ v
-        print('\n||Mv||:', (Mv @ Mv)**0.5)
-        print('||v||^2:', v @ v)
-        print('max{||M - M_approx||}:', np.max(np.abs(M - M_approx)))
-        print('S:', S)
-
     return T
 
 def estimate_H_DLT(img1_pts, img2_pts, verbose=False):

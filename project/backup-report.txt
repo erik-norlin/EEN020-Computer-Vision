@@ -1,0 +1,319 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[left=2.5cm,top=2cm,right=2.5cm,bottom=2cm,nofoot]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[UKenglish]{babel}
+\usepackage[UKenglish]{isodate}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{systeme}
+\usepackage{booktabs}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{icomma}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage[parfill]{parskip}
+\usepackage[title,titletoc]{appendix}
+\usepackage{multicol}
+\usepackage{float}
+\usepackage{gensymb}
+\usepackage{url}
+\usepackage{subcaption}
+\usepackage{esvect}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{cancel}
+\usepackage{comment}
+\usepackage{makecell}
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\usepackage[numbered,framed]{matlab-prettifier}
+\definecolor{mygreen}{RGB}{28,172,0} % color values Red, Green, Blue
+\definecolor{mylilas}{RGB}{170,55,241}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstdefinelanguage{Julia}%
+  {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,%
+      end,export,false,for,function,immutable,import,importall,if,in,%
+      macro,module,otherwise,quote,return,switch,true,try,type,typealias,%
+      using,while},%
+   sensitive=true,%
+   alsoother={\$},%
+   morecomment=[l]\#,%
+   morecomment=[n]{\#=}{=\#},%
+   morestring=[s]{"}{"},%
+   morestring=[m]{'}{'},%
+}[keywords,comments,strings]%
+
+\lstset{%
+    language         = Julia,
+    basicstyle       = \ttfamily,
+    keywordstyle     = \bfseries\color{blue},
+    stringstyle      = \color{magenta},
+    commentstyle     = \color{ForestGreen},
+    showstringspaces = false,
+}
+\lstset{style=mystyle}
+\pagestyle{myheadings}
+\pagenumbering{empty}
+
+\title{Project EEN020 Computer Vision}
+\author{Erik Norlin}
+\date{\today}
+
+\begin{document}
+\cleanlookdateon
+\maketitle
+\begin{center}
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{cc}
+\end{tabular}
+
+\end{center}
+\vspace{1.0cm}
+
+\pagenumbering{arabic}
+
+
+
+\section*{Algorithm}
+
+The algorithm consists of four parts; rotation averaging to estimate the absolute rotations of the cameras, translation registration to estimate the translations of the cameras, camera refinement to bundle adjust the cameras, and triangulation of the final 3D-reconstruction.
+
+\subsection*{Rotation averaging}
+All absolute rotations are obtained by chaining the relative rotations of each adjacent camera pair as $R_j=R_{i,j}R_i$. The relative rotations are extracted from robustly estimated essential matrices and normalized by taking the singular value decomposition of $R_{i,j}$ and setting $R_{i,j}=UV^T$.
+
+Essential matrices for each adjacent camera pair are robustly estimated using image correspondences obtained from SIFT-points in a RANSAC loop. \texttt{estimate\_E\_robust} from assignment 4 is extended by also extracting essential matrices from an estimated homography, checking the validity of every estimated essential matrix, and dynamically changing the number of RANSAC iterations $T_E$ and $T_H$ by computing
+
+\begin{equation}\label{eq:T}
+T = \ceil*{\frac{\ln(1-\alpha)}{\ln (1-\epsilon^s)}}
+\end{equation}
+
+Since this formula can be aggressive in the sense that the number of RANSAC iterations can be very large, and sometimes be very small, they are therefore capped at a maximum and minimum number of iterations. The number of RANSAC iterations can also be scaled by a factor.
+
+In each iteration both an essential matrix and a homogropahy are estimated for minimal samples using an 8-point DLT method and a 4-point DLT method respectively. From the homography, two other essential matrices can be extracted. The reason for extracting essential matrices from a homography is that as the scene becomes more planar the risk of degenerate solutions obtained by the 8-point method increases, whereas a homography becomes better at mapping the image points of two cameras facing the scene. Inliers for an essential matrix are measured with point-to-line distance (point to epipolar line), and inliers for a homography are measured with point-to-point distance (point to projected point). The pixel-threshold for computing inliers of the homography is set to three times larger than for computing inliers of the essential matrices, and the pixel-threshold for computing inliers of the essential matrices is the threshold of recommendation in each data set. A valid essential matrix has rank 2 and is therefore always tested for this. If a new best essential matrix is estimated but is not rank 2 then it is discarded. $T_E$ and $T_H$ are adjusted every time a better valid essential matrix is found. 
+
+When RANSAC has terminated, four cameras are extracted from the best essential matrix \textit{outside} the RANSAC loop to speed up the process. The cheirality test is perfomed on these cameras, and the camera that yields the most inliers in front of both cameras is selected as the correct solution. For the vast majority of the time this works wonderful. However in rare cases, triangulating 3D-points using the correct extracted camera from the returned valid essential matrix results in non-sensical "sprays" of point clouds.
+
+\subsection*{Translation registration}
+An initial 3D-reconstruction is triangulated with relative cameras and image correspondences (SIFT-matches) from an initial camera pair with a sufficiently large baseline. Outliers are removed as well as 10\% of the 3D-points being the furthest away from the center of gravity of the point cloud. The initial 3D-reconstruction is not rotated nor centered because the canonical camera in the common coordinate frame is set to be camera $P_i$ of the initial pair. Hence, rotation and centering of the 3D-points are not needed. The pixel-threshold for computing inliers of the initial essential matrix is set to three times larger than the threshold of recommendation.
+
+2D-3D correspondences are established for each camera by matching descriptors corresponding to the 3D-points and the descriptors for the image points obtained from SIFT. 
+
+Camera translations are robustly estimated in \texttt{estimate\_T\_robust} in a RANSAC loop one by one for a minimal sample of 2 by solving $\textbf{T}_i$ in eq. \ref{eq:1} using least squares.
+
+\begin{equation}\label{eq:1}
+\begin{pmatrix}
+1 & 0 & x_1 \\
+0 & 1 & x_2 \\
+\end{pmatrix}
+\textbf{T}=
+\begin{pmatrix}
+\Tilde{X}_3x_1-X_1 \\
+\Tilde{X}_3x_2-X_2 \\
+\end{pmatrix}\text{, where } 
+\Tilde{X} = RX
+\end{equation}
+
+3D points are projected onto the image plane using the absolute rotation and an estimate of the translation vector, and the 2D-3D inliers are measured using point-to-point distance between the projected points and the corresponding image points. The pixel-threshold for computing inliers here is set to three times larger than the threshold of recommendation.
+
+Initially, the translations were estimated using a 2-point method obtained by simplifying \texttt{estimate\_P\_DLT} from assignment 2, which involved solving $\textbf{T}_i$ using SVD. Unfortunately, this method did not result in inliers for all cameras even with extremely large values for the pixel-threshold. At times, some cameras only got one inlier, and these initial estimates turned out to never be good enough for the bundle adjustment to yield satisfactory final 3D-reconstructions. Instead, solving $\textbf{T}_i$ from eq. \ref{eq:1} for a minimal sample of two using least squares resulted in significantly more inliers for all cameras and satisfying 3D-reconstructions. 
+
+\subsection*{Camera refinement}
+The absolute rotations and translations are refined by minimizing the squared reprojection error using Levenberg-Marquardt (LM) where the rotations are parametrized as quaternions when being optimized.
+
+A modified version of LM from assignment 4 was first implemented for this where the rotations and the translations are optimized and the 3D-points assumed fixed. The rotations were first parametrized to axis-angle representation but doing this was infeasible. The rotations of the cameras are so small for some data sets that the angle representation is practically zero resulting in singularity in the parametrization. Instead, the rotations are parametrized as quaternions which avoids this issue.
+
+The updates $\delta \textbf{T}_i$ and $\delta \textbf{q}_i$ are computed using the jacobian of the residuals. The jacobian of the residual with respect to the translation parameters are analytically calculated as 
+
+\begin{equation}
+\frac{\partial\textbf{r}}{\partial \textbf{T}_i^1} =
+\begin{bmatrix}
+\frac{-1}{R_i^3\textbf{X}_j+\textbf{T}_i^3} \\
+\textbf{0}
+\end{bmatrix}
+\text{, }
+\frac{\partial\textbf{r}}{\partial \textbf{T}_i^2} =
+\begin{bmatrix}
+\textbf{0}
+\\
+\frac{-1}{R_i^3\textbf{X}_j+\textbf{T}_i^3} \\
+\end{bmatrix}
+\text{, }
+\frac{\partial\textbf{r}}{\partial \textbf{T}_i^3} =
+\begin{bmatrix}
+\frac{R_i^1\textbf{X}_j+\textbf{T}_i^1}{(R_i^3\textbf{X}_j+\textbf{T}_i^3)^2} \\
+\\
+\frac{R_i^2\textbf{X}_j+\textbf{T}_i^2}{(R_i^3\textbf{X}_j+\textbf{T}_i^3)^2} 
+\end{bmatrix}
+\end{equation}
+
+The jacobian of the residual with respect to the quaternion parameters are tedious to write here but are implemented in \texttt{compute\_jacobian\_of\_residual\_wrt\_q} in \texttt{computer\_vision.py}.
+
+The cameras are optimized one by one and LA is terminated when the reprojection error is "too close" to the reprojection error of the previous iteration. However, the cameras that are returned from the optimization are essentially the same as before. One fix that could potentially improve the implementation is to optimize over all parameters of all cameras simultaneously in order to increase the reprojection error and give LA more to work with, so to speak. It still remains unclear why this implementation does not work as expected, though. For further details about this implementation see \texttt{optimize\_T\_and\_R} in \texttt{computer\_vision.py}.
+
+Resorting to other options, LM is instead implemented using Scipy's least squares module where LM is an available method. Refining all cameras at once using this module is convenient and it turns out that this yields better 3D-reconstructions. The 3D-reconstructions from each adjacent camera pair aligns closely with each other with slight offset, which is reasonable since this is not a full scale bundle adjustment.
+
+\subsection*{Final 3D-reconstruction}
+Two final 3D-reconstructions are obtained by accumulating triangulated 3D-points using cameras and image correspondences for each adjacent camera pair. The first showing the reconstruction of the un-refined camera pairs, and the other showing the reconstruction of the refined camera pairs.
+
+
+
+\newpage
+\section*{Running the software}
+
+The modules that needs to be installed to run this software are
+\begin{itemize}
+\item \texttt{argparse}
+\item \texttt{matplotlib}
+\item \texttt{numpy}
+\item \texttt{opencv-python}
+\item \texttt{scipy}
+\item \texttt{tqdm}
+\end{itemize}
+
+The files of the actual implementation are
+\begin{itemize} 
+\item \texttt{computer\_vision.py}
+\item \texttt{get\_dataset\_info.py}
+\item \texttt{main.py}
+\item \texttt{pipeline.py}
+\end{itemize}
+which all need to be in the working directory together with a \texttt{data} folder containing numerated sub-folders with data sets. \texttt{computer\_vision.py} contains more general functions for computer vision tasks such as robust estimations and LM, and \texttt{pipeline.py} contains larger functions for the specific steps of the project such as rotation averaging, translation registration, etc.
+
+Run the software with \texttt{main.py} \texttt{-dataset=<dataset>}, where \texttt{-dataset} is required and takes an integer and searches for the specified data set in the \texttt{data} folder.
+
+\section*{Reconstruction of the data sets}
+Figures \ref{fig:d3bt}-\ref{fig:d9at} show reconstructions of the data sets before and after LM optimization. The 3D-point clouds obtained from triangulation from all adjacent camera pairs have different colors to differentiate them. The reconstructions look pretty good before optimization, and after optimization we can that LM has improved the solutions.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_2_before_LM_lstsq.png}
+    \caption{Reconstruction of data set 3 before LM.}
+    \label{fig:d3bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_2_after_LM_lstsq.png}
+    \caption{Reconstruction of data set 3 after LM.}
+    \label{fig:d3at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_3_before_LM_lstsq.png}
+    \caption{Reconstruction of data set 4 before LM.}
+    \label{fig:d4bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_3_after_LM_lstsq.png}
+    \caption{Reconstruction of data set 4 after LM.}
+    \label{fig:d4at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_4_before_LM_lstsq.png}
+    \caption{Reconstruction of data set 5 before LM.}
+    \label{fig:d5bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_4_after_LM_lstsq.png}
+    \caption{Reconstruction of data set 5 after LM.}
+    \label{fig:d5at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_5_before_LM_lstsq.png}
+    \caption{Reconstruction of data set 6 before LM.}
+    \label{fig:d6bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_5_after_LM_lstsq.png}
+    \caption{Reconstruction of data set 6 after LM.}
+    \label{fig:d6at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_6_before_LM_lstsq.png}
+    \caption{Reconstruction of data set 7 before LM.}
+    \label{fig:d7bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_6_after_LM_lstsq.png}
+    \caption{Reconstruction of data set 7 after LM.}
+    \label{fig:d7at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_7_before_LM_lstsq.png}
+    \caption{Reconstruction of data set 8 before LM.}
+    \label{fig:d8bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_7_after_LM_lstsq.png}
+    \caption{Reconstruction of data set 8 after LM.}
+    \label{fig:d8at}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_8_before_LM_lstsq.png}
+    \caption{Reconstruction of data set 9 before LM.}
+    \label{fig:d9bt}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{dataset_8_after_LM_lstsq.png}
+    \caption{Reconstruction of data set 9 after LM.}
+    \label{fig:d9at}
+\end{figure}
+
+
+\end{document}

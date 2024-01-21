@@ -1,6 +1,5 @@
 import numpy as np
 from numpy import linalg as LA
-from scipy.io import loadmat
 from scipy import optimize
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
